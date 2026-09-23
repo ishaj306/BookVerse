@@ -1,49 +1,176 @@
+/* ============================================================
+   BookVerse — Design System: "The Illuminated Archive"
+   Directly matching the PRD specification and Kathak Journal lineage
+   ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Color Palette - Light Mode (Default) */
+  --ink: #1F1B18;
+  --parchment: #F6F1E7;
+  --parchment-dim: #EDE6D6;
+  --oxblood: #6B1E2A;
+  --oxblood-deep: #4A141C;
+  --antique-gold: #B08D57;
+  --sage-muted: #6E7A5E;
+  --charcoal: #2B2521;
+
+  /* Theme mappings */
+  --bg-primary: var(--parchment);
+  --bg-surface: var(--parchment-dim);
+  --text-primary: var(--ink);
+  --text-body: var(--charcoal);
+  --text-muted: rgba(31, 27, 24, 0.65);
+  --border-subtle: rgba(176, 141, 87, 0.25);
+  --border-strong: var(--antique-gold);
+  --accent: var(--oxblood);
+  --accent-hover: var(--oxblood-deep);
+  --gold: var(--antique-gold);
+  --tag-bg: rgba(110, 122, 94, 0.15);
+  --tag-text: #455038;
+
+  /* Typography variables injected from Next.js Google Fonts */
+  --font-display: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  --font-ui: var(--font-dm-sans), 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+[data-theme="dark"],
+.dark-theme,
+.constellation-mode {
+  --bg-primary: var(--oxblood-deep);
+  --bg-surface: #380E15;
+  --text-primary: var(--parchment);
+  --text-body: var(--parchment-dim);
+  --text-muted: rgba(246, 241, 231, 0.65);
+  --border-subtle: rgba(176, 141, 87, 0.35);
+  --border-strong: var(--antique-gold);
+  --accent: var(--antique-gold);
+  --accent-hover: #c4a169;
+  --gold: var(--antique-gold);
+  --tag-bg: rgba(110, 122, 94, 0.35);
+  --tag-text: var(--parchment);
 }
 
-html {
-  height: 100%;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-}
-
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-body);
+  font-family: var(--font-ui);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+/* Typography Base */
+h1, h2, h3, h4, h5, h6,
+.font-display {
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  font-weight: 600;
+  line-height: 1.25;
 }
 
+p, span, button, input, textarea, select {
+  font-family: var(--font-ui);
+}
+
+/* Numerals - DM Sans tabular figures with slightly wider tracking */
+.numeral,
+.stat-figure,
+.page-count {
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+/* Inscription Pull-quotes */
+blockquote,
+.inscription-quote {
+  font-family: var(--font-display);
+  font-style: italic;
+  border-left: 2px solid var(--antique-gold);
+  padding-left: 1.25rem;
+  color: var(--text-primary);
+}
+
+/* Common UI Elements */
 a {
   color: inherit;
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-size: 1rem;
+}
+
+/* Illuminated Archive Buttons */
+.btn-primary {
+  background-color: var(--oxblood);
+  color: var(--parchment);
+  font-family: var(--font-ui);
+  font-weight: 500;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn-primary:hover {
+  background-color: var(--oxblood-deep);
+}
+
+.btn-secondary {
+  border: 1px solid var(--antique-gold);
+  color: var(--text-primary);
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background-color: rgba(176, 141, 87, 0.1);
+}
+
+/* Status Badges & Pills */
+.tag-pill {
+  display: inline-block;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  font-size: 0.8125rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* Parchment Card Frame */
+.folio-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(31, 27, 24, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.folio-card:hover {
+  border-color: var(--oxblood);
+  box-shadow: 0 6px 16px rgba(107, 30, 42, 0.08);
 }
