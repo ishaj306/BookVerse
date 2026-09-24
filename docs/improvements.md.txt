@@ -1,0 +1,40 @@
+BookVerse — Improvement & Handoff Notes
+Reviewed against AI_SESSION_LOG.md and DOCUMENTATION.md. The backend build (schema, RLS, API routes, constellation logic) is solid and matches the PRD closely — these are the gaps and drift worth closing before calling v1 done.
+
+1. Critical: the build is on the old design tokens (fix before merging Stitch screens)
+The session log and globals.css are still on "The Illuminated Archive" — oxblood, antique gold, sage, Cormorant Garamond, DM Sans. That was superseded in the PRD by "The Reading Room" (library green, brass, muted rust, Fraunces, Work Sans) so BookVerse wouldn't be a visual copy of Kathak Journal. The Stitch prompts you'll use to generate screens already carry the new palette — if you export Stitch screens now and merge them into the current codebase, the screens and the app shell will visibly clash.
+
+Fix before Step 1 (frontend merge) in the session log:
+
+In code now	Change to
+--oxblood: #6B1E2A	--library-green: #2F4538
+--oxblood-deep: #4A141C	--library-green-deep: #1D2B22
+--antique-gold: #B08D57	--brass: #A9822C
+--sage-muted: #6E7A5E	--rust-muted: #8C4A2F
+--parchment: #F6F1E7	--parchment: #F4EFE3 (slightly cooler cream)
+--parchment-dim: #EDE6D6	--parchment-dim: #E9E1CE
+Cormorant Garamond	Fraunces
+DM Sans	Work Sans
+Roman-numeral footer copy on the landing page (Screen 1 spec)	Plain small caps — the Roman numeral is Kathak Journal's own signature, dropped for Reading Room
+This is a find-and-replace in globals.css plus a Google Fonts swap in app/layout.js — cheap now, expensive after six Stitch screens are wired in.
+
+2. Data lifecycle gaps
+A few places where the schema/API exist but the update path isn't defined yet:
+
+Goals never auto-update. goals.current has nowhere documented that increments it when a book's status flips to read. Without this, the yearly reading-goal bar on the dashboard will always read 0 unless the user manually edits it. Wire this into the PATCH /api/library handler (or a DB trigger on user_books.status).
+Orphaned book_connections. If a user removes a book from their library or deletes the journal entries that generated a shared-tag edge, nothing removes the corresponding row in book_connections. Over time the Constellation will show connections to books that are no longer "in" the library. Add a cleanup step to the delete handlers in /api/library and /api/journal.
+book_cache has no staleness policy. A book's genre or description could change upstream (Google Books occasionally corrects metadata), but nothing re-fetches it — it's cached forever on first insert. Not urgent for v1, but worth a cached_at-based TTL (e.g. re-fetch if older than 90 days) before this ships anywhere public.
+3. Missing pieces before v1 is actually complete
+No avatar upload path. The schema has avatar_url and the profile is fetched/patched via /api/user, but there's no route or Supabase Storage wiring to actually set it (upload a file, get a public URL, save it). Either add this or explicitly scope "avatar upload" out of v1 and default to a generated placeholder.
+No deployment section in DOCUMENTATION.md. It covers local npm run dev but not how to set the same env vars in the Vercel dashboard, or that Clerk/Supabase both need their production (not test/dev) keys and redirect URLs updated for the deployed domain. Worth adding before you actually deploy, since Clerk redirect-URL mismatches are the most common "works locally, breaks on Vercel" bug.
+No pagination on /api/library or /api/books/search. Fine at 20 books, will matter once the demo dataset (your own reading history) grows past a page or two.
+Auth pages — already flagged as pending in the session log, just repeating it here since it blocks a real end-to-end test.
+4. Minor structural nit
+The landing page is mapped to app/(auth)/page.js. In Next.js, (auth) as a route-group name conventionally signals "auth-related pages live here" (sign-in, sign-up) — putting the public marketing landing page in the same group will confuse anyone (including a future agent) reading the file tree. Worth a quick rename to app/(marketing)/page.js or just app/page.js at the root, with (auth) reserved for sign-in/sign-up.
+
+5. Nice-to-have, genuinely post-v1
+Basic rate limiting on the API routes (even a simple per-user request cap), since nothing currently stops a runaway client-side loop from hammering /api/books/search and burning through the Google Books quota.
+A couple of unit tests around recomputeTagConnections() / recomputeGenreConnections() specifically — that logic is the differentiator, so it's the one place worth protecting from a careless refactor later.
+A background job (cron or Vercel scheduled function) to refresh stale book_cache rows, once the TTL from §2 is in place.
+6. Aside — your Google AI Pro (via Jio)
+This doesn't change the "no AI feature in v1" call — that reasoning (avoid a bolted-on chatbot, keep the Constellation as the one AI-adjacent feature) holds regardless of budget. But worth knowing: that plan includes higher Gemini Code Assist/CLI request limits, which likely extends to Antigravity's Gemini-backed agent quota too, so you have more headroom there than the free preview alone gives you. It also includes Nano Banana image generation, which — if you ever want an optional v2 feature — could generate a subtle background texture or placeholder cover art without needing a separate paid API key. Not a v1 recommendation, just noting the option exists now that it didn't when we scoped the "no AI" decision.

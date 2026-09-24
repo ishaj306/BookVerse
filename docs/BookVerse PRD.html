@@ -1,0 +1,363 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}</style><style>:root{color-scheme:light dark;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}}:root[data-theme="dark"]{color-scheme:dark;--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}:root[data-theme="light"]{color-scheme:light}@media print{:root,:root[data-theme="dark"]{color-scheme:light;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}}body{background:var(--md-bg);color:var(--md-text);max-width:720px;margin:0 auto;padding:32px;display:flex;flex-direction:column;gap:10px;font:14px/1.55 -apple-system,BlinkMacSystemFont,'SF Pro','Segoe UI',sans-serif;overflow-wrap:break-word}body>:first-child{margin-top:0}h1,h2,h3,h4,h5,h6{margin:6px 0 0;line-height:1.25;font-weight:600;text-wrap:balance}h1{font-size:1.35em}h2{font-size:1.15em;color:var(--md-muted)}h3,h4,h5,h6{font-size:1em}p,ul,ol,blockquote,table,pre,hr{margin:0}strong{font-weight:600}a{color:var(--md-link);text-decoration:none}a:hover{text-decoration:underline}ul,ol{display:flex;flex-direction:column;gap:6px;padding-left:22px}ul{list-style:disc}ol{list-style:decimal}:is(li,td,th)>*+:is(p,ul,ol,blockquote){margin-top:6px}blockquote{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--md-rule);padding-left:10px;color:var(--md-muted)}:not(pre)>code{background:var(--md-fill);padding:1px 3px;border-radius:4px;font:.92em 'SF Mono',ui-monospace,Menlo,Consolas,monospace}a>code{background:none;color:inherit}pre{background:var(--md-fill);padding:10px 12px;border-radius:6px;overflow-x:auto;font:12px/1.5 'SF Mono',ui-monospace,Menlo,Consolas,monospace;margin-block:4px}pre code{background:none;padding:0;font:inherit}table{width:100%;border-collapse:separate;border-spacing:2px;font:inherit}th,td{padding:6px 8px;border-radius:3px;text-align:left;vertical-align:top}th{background:var(--md-fill-strong);font-weight:600}td{background:var(--md-fill)}:is(th,td) :not(pre)>code{background:transparent}hr{border:0;border-top:1px solid var(--md-rule-strong);margin-block:10px}img{max-width:100%;height:auto;border-radius:4px}</style>
+</head><body>
+<h1>BookVerse — Product Requirements Document</h1>
+<p><em>A digital archive for a reading life. Same design lineage as Kathak Journal — an illuminated manuscript, not a tracker.</em></p>
+<hr>
+<h2>1. Positioning</h2>
+<p><strong>One line:</strong> BookVerse is not &quot;what have you read&quot; — it's &quot;what has your reading life looked like.&quot;</p>
+<p><strong>Differentiator:</strong> the <strong>Reading Constellation</strong> (personal knowledge graph) — a visual map of how your books connect to each other through theme, genre, and your own notes. This is the one feature nothing else on the market does well. Everything else in this PRD exists to feed it data.</p>
+<p><strong>Explicit non-goals for v1:</strong> BookVerse v1 is not trying to be a social network, a gamification engine, or an AI chatbot. Those are v2+ if the core product earns them.</p>
+<hr>
+<h2>2. Critique summary (why the scope below differs from the original brainstorm)</h2>
+<table>
+<thead>
+<tr>
+<th>Original idea</th>
+<th>Verdict</th>
+<th>Disposition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Full social layer (follows, feed, likes, comments)</td>
+<td>High backend cost, low differentiation vs. Goodreads</td>
+<td>Cut to v2</td>
+</tr>
+<tr>
+<td>Achievements/gamification</td>
+<td>Fun but non-essential; no defined trigger mechanism</td>
+<td>Cut to v2, needs an eval strategy first</td>
+</tr>
+<tr>
+<td>Generic &quot;Ask AI&quot; chatbot</td>
+<td>Bolted-on AI pattern, no real use case — and no LLM budget right now anyway</td>
+<td>Cut entirely for v1</td>
+</tr>
+<tr>
+<td>Reading Journal (notes/quotes)</td>
+<td>Core differentiator's <em>data source</em></td>
+<td><strong>Keep, v1</strong></td>
+</tr>
+<tr>
+<td>Reading Analytics</td>
+<td>Genuinely useful, moderate cost</td>
+<td><strong>Keep, v1, simplified</strong></td>
+</tr>
+<tr>
+<td>Personal Knowledge Graph</td>
+<td>Only truly novel idea in the concept</td>
+<td><strong>Keep, v1 — as the spine, not a phase-4 add-on</strong></td>
+</tr>
+<tr>
+<td>Book discovery (search/trending)</td>
+<td>Necessary utility, not differentiation</td>
+<td>Keep, minimal</td>
+</tr>
+</tbody>
+</table>
+<p>The rule going forward: a feature ships in v1 only if it either (a) feeds the Constellation, or (b) is required to use the product at all (auth, add-a-book, read-status). Everything else waits.</p>
+<hr>
+<h2>3. Design language — &quot;The Illuminated Archive&quot;</h2>
+<p>Directly continuing your existing dark-editorial identity (as used on your portfolio and Kathak Journal) rather than starting a new visual language from scratch. Same family, different manuscript.</p>
+<h3>Palette</h3>
+<table>
+<thead>
+<tr>
+<th>Token</th>
+<th>Hex</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--ink</code></td>
+<td><code>#1F1B18</code></td>
+<td>Primary text, headers on light surfaces</td>
+</tr>
+<tr>
+<td><code>--parchment</code></td>
+<td><code>#F6F1E7</code></td>
+<td>Primary background (warm ivory, not stark white)</td>
+</tr>
+<tr>
+<td><code>--parchment-dim</code></td>
+<td><code>#EDE6D6</code></td>
+<td>Secondary surfaces, cards</td>
+</tr>
+<tr>
+<td><code>--oxblood</code></td>
+<td><code>#6B1E2A</code></td>
+<td>Primary accent — CTAs, active states, progress fills (matches Kathak Journal's theme color exactly, ties the two projects visually)</td>
+</tr>
+<tr>
+<td><code>--oxblood-deep</code></td>
+<td><code>#4A141C</code></td>
+<td>Hover/pressed states, dark-mode primary surface</td>
+</tr>
+<tr>
+<td><code>--antique-gold</code></td>
+<td><code>#B08D57</code></td>
+<td>Ratings, highlights, dividers, achievement/streak accents</td>
+</tr>
+<tr>
+<td><code>--sage-muted</code></td>
+<td><code>#6E7A5E</code></td>
+<td>Optional tertiary — genre tags, secondary charts (keeps the palette from being only warm tones)</td>
+</tr>
+<tr>
+<td><code>--charcoal</code></td>
+<td><code>#2B2521</code></td>
+<td>Body text on parchment</td>
+</tr>
+</tbody>
+</table>
+<p>Dark mode: invert to <code>--oxblood-deep</code> background, <code>--parchment</code> text, <code>--antique-gold</code> accents — same relationship as light mode, just at night.</p>
+<h3>Typography</h3>
+<ul>
+<li><strong>Display / headings:</strong> Cormorant Garamond — same as your existing brand. Used for book titles, section headers, the hero line. Italic weight for pull-quotes from the Reading Journal.</li>
+<li><strong>UI / body:</strong> DM Sans — same as your existing brand. All buttons, nav, metadata, form fields.</li>
+<li><strong>Numerals (stats, streaks, page counts):</strong> DM Sans, tabular figures, slightly larger tracking — numbers should read as data, not decoration.</li>
+</ul>
+<h3>Motifs carried over from Kathak Journal</h3>
+<ul>
+<li>&quot;Folio&quot; language instead of generic SaaS nouns: a book's page is a <strong>folio</strong>, the journal entry is an <strong>inscription</strong>, the whole personal collection is a <strong>manuscript</strong>.</li>
+<li>Illuminated corner flourishes / marginalia as subtle SVG accents on empty states and section dividers — never on every card (avoid the &quot;gradient blob on every panel&quot; trap the brainstorm doc itself warned against).</li>
+<li>Roman-numeral or literary micro-copy in the footer (<code>© MMXXVI</code>), same as Kathak Journal, for brand continuity across your project suite.</li>
+<li>Generous whitespace, serif-led hierarchy, restrained iconography — the anti-&quot;purple gradient SaaS&quot; direction you already committed to.</li>
+</ul>
+<hr>
+<h2>4. v1 Scope (the actual MVP)</h2>
+<h3>4.1 Auth &amp; Profile</h3>
+<ul>
+<li>Clerk (email + Google) — connected to Supabase via Clerk's third-party auth integration, not Supabase Auth</li>
+<li>Minimal profile: name, avatar, bio, join date</li>
+</ul>
+<h3>4.2 Library</h3>
+<ul>
+<li>Add book via search (Google Books API, cached locally — see §6)</li>
+<li>Status: Want to Read / Reading / Read / Paused / DNF</li>
+<li>Progress tracking (page or %)</li>
+<li>Custom shelves (user-created, many-to-many with books)</li>
+</ul>
+<h3>4.3 Reading Journal (data source for the Constellation)</h3>
+<ul>
+<li>Per-book: notes, quotes, tags, page references, start/finish dates</li>
+<li>Tags are the raw material the Constellation graphs — make tagging fast and low-friction (autocomplete from prior tags, suggested tags from genre)</li>
+</ul>
+<h3>4.4 Reading Constellation (the differentiator)</h3>
+<ul>
+<li>v1 approach: <strong>not</strong> an LLM-embedding graph — no LLM credits budgeted right now, and it'd be too heavy for v1 anyway, hard to explain, hard to debug. Instead, nodes = books, edges = shared tags/genres weighted by count, plus manual &quot;this reminded me of X&quot; links the user can draw themselves.</li>
+<li>Rendered as a force-directed graph (a JS library like d3-force is enough — no need for a custom physics engine)</li>
+<li>This is intentionally simple in v1 so it <em>ships</em>; embedding-based similarity is a clean v2 upgrade path once real tag/note data exists to embed</li>
+</ul>
+<h3>4.5 Reading Analytics</h3>
+<ul>
+<li>Books/pages per month, average rating, genre breakdown, reading streak</li>
+<li>Built directly off <code>reading_sessions</code> (see schema) — <strong>log this from day one</strong>, even in v1, or the analytics and streak features have nothing to compute from later</li>
+</ul>
+<h3>4.6 Discovery</h3>
+<ul>
+<li>Search (Google Books API)</li>
+<li>Basic &quot;similar books&quot; via shared genre/tag — same underlying data as the Constellation, reused, not a separate system</li>
+</ul>
+<p><strong>Deliberately deferred to v2:</strong> social/follows/feed, achievements, AI chat, structured multi-axis reviews, public profile pages.</p>
+<hr>
+<h2>5. User story (single north star)</h2>
+<blockquote>
+<p>As a reader, I finish a book, write down what I thought and a quote that mattered, tag it, and later — without doing anything else — I can look at a map of my last twenty books and see the invisible thread connecting my &quot;psychology&quot; phase to my &quot;fantasy&quot; phase.</p>
+</blockquote>
+<p>If a proposed feature doesn't serve this story, it's not v1.</p>
+<hr>
+<h2>6. Data model (Supabase / Postgres)</h2>
+<p>Refinements vs. the original brainstorm are marked <strong>(new)</strong>.</p>
+<pre><code class="language-sql">-- Cached book metadata, so we don&#39;t hit Google Books on every render (new)
+create table book_cache (
+  id uuid primary key default gen_random_uuid(),
+  source_id text unique not null,        -- Google Books volume id
+  title text not null,
+  author text,
+  description text,
+  isbn text,
+  cover_url text,
+  publication_date date,
+  pages int,
+  genres text[],
+  cached_at timestamptz default now()
+);
+
+-- id is the Clerk user id (text, e.g. &#34;user_2abc...&#34;), not a Supabase Auth uuid
+create table users (
+  id text primary key,
+  name text,
+  bio text,
+  avatar_url text,
+  created_at timestamptz default now()
+);
+
+create table user_books (
+  id uuid primary key default gen_random_uuid(),
+  user_id text references users(id) on delete cascade,
+  book_id uuid references book_cache(id),
+  status text check (status in (&#39;want&#39;,&#39;reading&#39;,&#39;read&#39;,&#39;paused&#39;,&#39;dnf&#39;)),
+  progress numeric default 0,
+  rating numeric,
+  started_at date,
+  finished_at date,
+  unique (user_id, book_id)
+);
+
+create table journal_entries (
+  id uuid primary key default gen_random_uuid(),
+  user_id text references users(id) on delete cascade,
+  book_id uuid references book_cache(id),
+  content text,
+  quote text,
+  page_number int,
+  tags text[],                          -- raw material for the Constellation
+  created_at timestamptz default now()
+);
+
+create table shelves (
+  id uuid primary key default gen_random_uuid(),
+  user_id text references users(id) on delete cascade,
+  name text not null,
+  description text
+);
+
+create table shelf_books (
+  shelf_id uuid references shelves(id) on delete cascade,
+  book_id uuid references book_cache(id),
+  primary key (shelf_id, book_id)
+);
+
+-- Session-level granularity from day one (new) — powers streaks + heatmap + pace
+create table reading_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id text references users(id) on delete cascade,
+  book_id uuid references book_cache(id),
+  pages_read int,
+  duration_minutes int,
+  session_date date not null default current_date
+);
+
+-- Manual &#34;this reminded me of X&#34; edges, plus computed tag-overlap edges (new)
+create table book_connections (
+  id uuid primary key default gen_random_uuid(),
+  user_id text references users(id) on delete cascade,
+  from_book_id uuid references book_cache(id),
+  to_book_id uuid references book_cache(id),
+  connection_type text check (connection_type in (&#39;manual&#39;,&#39;shared_tag&#39;,&#39;shared_genre&#39;)),
+  weight numeric default 1
+);
+
+create table goals (
+  id uuid primary key default gen_random_uuid(),
+  user_id text references users(id) on delete cascade,
+  type text,
+  target int,
+  current int default 0,
+  deadline date
+);
+</code></pre>
+<p><strong>RLS note (Clerk, not Supabase Auth):</strong> Supabase's native <code>auth.uid()</code> won't populate, since Clerk issues the JWT. Set Clerk up as a Supabase third-party auth provider, then write policies against <code>(auth.jwt() -&gt;&gt; 'sub') = user_id</code> instead — every table above needs this for select/insert/update/delete, except <code>book_cache</code>, which is shared read-only (all users hit the same cache) with writes restricted to a service role that populates it after Google Books calls.</p>
+<p><strong>Deferred tables (v2):</strong> <code>follows</code>, <code>reviews</code> (structured multi-axis), <code>achievements</code>, <code>activity_feed</code>.</p>
+<hr>
+<h2>7. Non-functional notes</h2>
+<ul>
+<li><strong>API rate limits:</strong> always check <code>book_cache</code> before calling Google Books; only call the external API on a cache miss, then write the result back.</li>
+<li><strong>Streaks/heatmap correctness:</strong> compute from <code>reading_sessions</code>, never from <code>user_books.finished_at</code> alone — a single &quot;finished&quot; date can't reconstruct daily activity retroactively.</li>
+<li><strong>Constellation performance:</strong> compute <code>book_connections</code> edges on write (when a journal entry's tags change) rather than recomputing the whole graph on every page load.</li>
+</ul>
+<hr>
+<h2>8. Success metric for v1</h2>
+<p>Not &quot;number of features shipped&quot; — the metric is: <strong>can a user look at their own Constellation after ~15 logged books and immediately recognize a real pattern in their reading?</strong> If yes, the differentiator works and v2 investment (social, AI-assisted graph, achievements) is justified. If no, fix the Constellation before adding anything else.</p>
+<hr>
+<h2>9. Stitch prompts</h2>
+<p>Paste these into Google Stitch one at a time. Each carries the color/font tokens from §3 so every screen stays visually consistent with Kathak Journal.</p>
+<h3>Design system prime (paste first, before any screen prompt)</h3>
+<pre><code>Design system: &#34;The Illuminated Archive&#34; — a literary, dark-editorial aesthetic for a
+personal reading archive called BookVerse (sister product to a Kathak dance journal
+with the same visual language).
+
+Colors:
+- Background (light): warm ivory parchment #F6F1E7, secondary surface #EDE6D6
+- Background (dark): deep oxblood #4A141C
+- Primary accent: oxblood #6B1E2A (buttons, progress bars, active states)
+- Secondary accent: antique gold #B08D57 (ratings, highlights, dividers)
+- Tertiary accent: muted sage #6E7A5E (tags, secondary chart series)
+- Text: ink #1F1B18 on light surfaces, parchment #F6F1E7 on dark surfaces
+
+Typography:
+- Headings, book titles, pull-quotes: Cormorant Garamond (serif, literary, generous
+  size, occasional italic for quotes)
+- UI text, buttons, nav, metadata, numbers: DM Sans
+- Numbers/stats use tabular figures and slightly wider letter spacing than body text
+
+Visual motifs: illuminated-manuscript feel without being literally medieval — think
+&#34;a beautifully kept archive,&#34; not &#34;fantasy game UI.&#34; Subtle corner-flourish or
+marginalia-style SVG accents only on empty states and section dividers, never on
+every card. Generous whitespace. Restrained, thin-line iconography. No purple
+gradients, no glassmorphism, no generic &#34;AI product&#34; visual cliches. Terminology:
+call a book&#39;s detail page a &#34;Folio,&#34; a journal entry an &#34;Inscription,&#34; the user&#39;s
+whole collection their &#34;Manuscript.&#34;
+</code></pre>
+<h3>Screen 1 — Landing page</h3>
+<pre><code>Using the Illuminated Archive design system above, design a landing page for
+BookVerse, a personal reading archive. Large Cormorant Garamond headline:
+&#34;Your reading life, beautifully kept.&#34; Subtext in DM Sans below it. Two CTAs:
+primary oxblood button &#34;Begin Your Manuscript,&#34; secondary text link &#34;Sign In.&#34;
+Below the fold, three feature callouts in a row (icon + Cormorant Garamond
+mini-heading + DM Sans one-line description): &#34;Your Library,&#34; &#34;The Journal,&#34;
+&#34;Your Constellation.&#34; Warm parchment background, generous vertical whitespace,
+footer in small caps with a Roman-numeral-styled copyright line.
+</code></pre>
+<h3>Screen 2 — Dashboard</h3>
+<pre><code>Using the Illuminated Archive design system, design a logged-in dashboard.
+Top: greeting in Cormorant Garamond (&#34;Good evening —&#34;), oxblood progress bar
+for the yearly reading goal (e.g. 17/26) with a DM Sans numeric label.
+Below: a &#34;Currently Reading&#34; card with cover thumbnail, title in serif,
+percent-complete progress bar in oxblood, and a &#34;Continue&#34; button. Below that,
+a GitHub-style activity heatmap using oxblood intensity shades on a parchment
+grid, labeled &#34;Your Reading Activity.&#34; Bottom row: three small stat tiles
+(Books, Pages, Reading Time) in DM Sans tabular numerals with gold accent
+underlines.
+</code></pre>
+<h3>Screen 3 — Library / shelves view</h3>
+<pre><code>Using the Illuminated Archive design system, design a library page showing
+book covers in a grid, grouped by status tabs (Want to Read / Reading / Read /
+Paused / DNF) styled as an understated serif tab bar with an oxblood active
+underline. A sidebar lists custom shelves as a vertical list with small gold
+dividers. Each book cover has a subtle parchment-colored shadow, hover state
+shows a thin oxblood border.
+</code></pre>
+<h3>Screen 4 — Folio (book detail page)</h3>
+<pre><code>Using the Illuminated Archive design system, design a book detail page
+(&#34;Folio&#34;). Left: large book cover with a soft drop shadow. Right: title in
+large Cormorant Garamond, author in DM Sans small caps, star rating in
+antique gold. Below: status selector (pill buttons), a progress bar, and a
+&#34;Your Inscriptions&#34; section showing journal entries as parchment-colored
+cards with the entry date in small DM Sans caps and quotes rendered in
+italic Cormorant Garamond with a thin gold left border, like a manuscript
+marginal note.
+</code></pre>
+<h3>Screen 5 — Reading Constellation</h3>
+<pre><code>Using the Illuminated Archive design system, design the &#34;Reading Constellation&#34;
+page: a force-directed node graph on a deep oxblood-dark background (this
+screen uses dark mode even if the rest of the app is light). Nodes are small
+circular book covers; edges are thin gold lines whose thickness reflects
+connection strength. A left panel in DM Sans lists the selected book&#39;s title,
+tags, and connected books when a node is clicked. Include a small legend in
+the corner distinguishing manual connections (solid gold line) from shared-tag
+connections (dashed sage line).
+</code></pre>
+<h3>Screen 6 — Reading Journal entry (composer)</h3>
+<pre><code>Using the Illuminated Archive design system, design a journal entry composer
+for a book, styled like a manuscript inscription page. Parchment background
+with a subtle deckle-edge or torn-paper texture at the top. Fields: a
+Cormorant Garamond italic textarea for the main thought, a smaller &#34;Favorite
+Quote&#34; field with a gold quotation-mark icon, a page-number input, and a tag
+input with autocomplete pills in muted sage. Save button in oxblood, labeled
+&#34;Inscribe.&#34;
+</code></pre>
+
+</body></html>
