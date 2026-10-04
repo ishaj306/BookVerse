@@ -1,9 +1,11 @@
-import { getAuthenticatedClients, handleApiError } from '@/lib/auth';
+import { getAuthenticatedClients, ensureUser, handleApiError } from '@/lib/auth';
+import { ApiError, readJson } from '@/lib/http';
+import { optionalText, requireUuid } from '@/lib/validate';
 
 /**
  * GET /api/connections
  *
- * Get all manual book connections for the user.
+ * The user's manual "this reminded me of" connections.
  */
 export async function GET() {
   try {
@@ -15,7 +17,6 @@ export async function GET() {
       .eq('user_id', userId)
       .eq('connection_type', 'manual')
       .order('created_at', { ascending: false });
-
     if (error) throw error;
 
     return Response.json({ data: data || [] });
@@ -27,49 +28,66 @@ export async function GET() {
 /**
  * POST /api/connections
  *
- * Create a manual "this reminded me of X" connection between two books.
+ * Draw a manual connection between two library books. If the pair is already
+ * connected (in either direction) its label is updated instead.
  * Body: { from_book_id, to_book_id, label? }
  */
 export async function POST(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
+    const body = await readJson(request);
 
-    const { from_book_id, to_book_id, label } = body;
+    const from = requireUuid(body.from_book_id, 'from_book_id');
+    const to = requireUuid(body.to_book_id, 'to_book_id');
+    const label = optionalText(body.label, 'label', 120);
 
-    if (!from_book_id || !to_book_id) {
-      return Response.json(
-        { error: 'from_book_id and to_book_id are required' },
-        { status: 400 }
-      );
-    }
+    if (from === to) throw new ApiError(400, 'Cannot connect a book to itself');
 
-    if (from_book_id === to_book_id) {
-      return Response.json(
-        { error: 'Cannot connect a book to itself' },
-        { status: 400 }
-      );
-    }
+    await ensureUser(userId, supabase);
 
-    const { data, error } = await supabase
+    const { count, error: libraryError } = await supabase
+      .from('user_books')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .in('book_id', [from, to]);
+    if (libraryError) throw libraryError;
+    if (count !== 2) throw new ApiError(400, 'Both books must be in your library');
+
+    const { data: existing, error: existingError } = await supabase
       .from('book_connections')
-      .upsert(
-        {
+      .select('id')
+      .eq('user_id', userId)
+      .eq('connection_type', 'manual')
+      .or(`and(from_book_id.eq.${from},to_book_id.eq.${to}),and(from_book_id.eq.${to},to_book_id.eq.${from})`)
+      .limit(1);
+    if (existingError) throw existingError;
+
+    let result;
+    if (existing && existing.length > 0) {
+      result = await supabase
+        .from('book_connections')
+        .update({ label })
+        .eq('id', existing[0].id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+    } else {
+      result = await supabase
+        .from('book_connections')
+        .insert({
           user_id: userId,
-          from_book_id,
-          to_book_id,
+          from_book_id: from,
+          to_book_id: to,
           connection_type: 'manual',
-          label: label || null,
+          label,
           weight: 1,
-        },
-        { onConflict: 'user_id,from_book_id,to_book_id,connection_type' }
-      )
-      .select()
-      .single();
+        })
+        .select()
+        .single();
+    }
+    if (result.error) throw result.error;
 
-    if (error) throw error;
-
-    return Response.json({ data }, { status: 201 });
+    return Response.json({ data: result.data }, { status: 201 });
   } catch (error) {
     return handleApiError(error);
   }
@@ -78,21 +96,13 @@ export async function POST(request) {
 /**
  * DELETE /api/connections
  *
- * Remove a manual connection.
  * Body: { id }
  */
 export async function DELETE(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
-
-    const { id } = body;
-    if (!id) {
-      return Response.json(
-        { error: 'id (book_connections.id) is required' },
-        { status: 400 }
-      );
-    }
+    const body = await readJson(request);
+    const id = requireUuid(body.id, 'id');
 
     const { error } = await supabase
       .from('book_connections')
@@ -100,7 +110,6 @@ export async function DELETE(request) {
       .eq('id', id)
       .eq('user_id', userId)
       .eq('connection_type', 'manual');
-
     if (error) throw error;
 
     return Response.json({ success: true });

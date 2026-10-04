@@ -1,48 +1,57 @@
-import { getAuthenticatedClients, handleApiError } from '@/lib/auth';
+import { getAuthenticatedClients, ensureUser, handleApiError } from '@/lib/auth';
+import {
+  recomputeGenreConnections,
+  recomputeTagConnections,
+  safeRecompute,
+} from '@/lib/constellation';
+import { ApiError, readJson } from '@/lib/http';
+import {
+  optionalDate,
+  optionalNumber,
+  optionalInt,
+  optionalRating,
+  requireStatus,
+  requireUuid,
+  resolveToday,
+} from '@/lib/validate';
 
 /**
- * GET /api/library?status=<status>
+ * GET /api/library?status=<status>&limit=<n>&offset=<n>
  *
- * Get all books in the user's library, optionally filtered by status.
- * Joins with book_cache to return full book details.
+ * The user's books, optionally filtered by status, joined with book_cache.
  */
 export async function GET(request) {
   try {
     const { userId, supabase, serviceClient } = await getAuthenticatedClients();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
+    const limit = optionalInt(searchParams.get('limit') ?? 200, 'limit', { min: 1, max: 500 });
+    const offset = optionalInt(searchParams.get('offset') ?? 0, 'offset', { min: 0 });
 
     let query = supabase
       .from('user_books')
       .select('*')
       .eq('user_id', userId)
-      .order('updated_at', { ascending: false });
+      .order('updated_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
-    if (status) {
-      query = query.eq('status', status);
-    }
+    if (status) query = query.eq('status', requireStatus(status));
 
     const { data: userBooks, error } = await query;
     if (error) throw error;
 
-    // Enrich with book_cache data
-    if (userBooks && userBooks.length > 0) {
-      const bookIds = userBooks.map((ub) => ub.book_id);
-      const { data: books } = await serviceClient
-        .from('book_cache')
-        .select('*')
-        .in('id', bookIds);
+    if (!userBooks || userBooks.length === 0) return Response.json({ data: [] });
 
-      const bookMap = new Map((books || []).map((b) => [b.id, b]));
-      const enriched = userBooks.map((ub) => ({
-        ...ub,
-        book: bookMap.get(ub.book_id) || null,
-      }));
+    const { data: books, error: booksError } = await serviceClient
+      .from('book_cache')
+      .select('*')
+      .in('id', userBooks.map((ub) => ub.book_id));
+    if (booksError) throw booksError;
 
-      return Response.json({ data: enriched });
-    }
-
-    return Response.json({ data: [] });
+    const bookMap = new Map((books || []).map((b) => [b.id, b]));
+    return Response.json({
+      data: userBooks.map((ub) => ({ ...ub, book: bookMap.get(ub.book_id) || null })),
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -51,46 +60,43 @@ export async function GET(request) {
 /**
  * POST /api/library
  *
- * Add a book to the user's library.
- * Body: { book_id, status, started_at? }
+ * Add a book to the user's library (or change its status if already there).
+ * Body: { book_id, status, started_at?, finished_at?, today? }
+ * `today` is the reader's local date (YYYY-MM-DD), used for auto-set dates.
  */
 export async function POST(request) {
   try {
-    const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
+    const { userId, supabase, serviceClient } = await getAuthenticatedClients();
+    const body = await readJson(request);
 
-    const { book_id, status, started_at } = body;
+    const bookId = requireUuid(body.book_id, 'book_id');
+    const status = requireStatus(body.status);
+    const today = resolveToday(body.today);
 
-    if (!book_id || !status) {
-      return Response.json(
-        { error: 'book_id and status are required' },
-        { status: 400 }
-      );
-    }
+    const { data: book } = await serviceClient
+      .from('book_cache')
+      .select('id')
+      .eq('id', bookId)
+      .maybeSingle();
+    if (!book) throw new ApiError(404, 'Book not found. Search for it first.');
 
-    const validStatuses = ['want', 'reading', 'read', 'paused', 'dnf'];
-    if (!validStatuses.includes(status)) {
-      return Response.json(
-        { error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` },
-        { status: 400 }
-      );
-    }
+    await ensureUser(userId, supabase);
+
+    const row = { user_id: userId, book_id: bookId, status };
+    const startedAt =
+      optionalDate(body.started_at, 'started_at') || (status === 'reading' ? today : null);
+    if (startedAt) row.started_at = startedAt;
+    const finishedAt = optionalDate(body.finished_at, 'finished_at') || (status === 'read' ? today : null);
+    if (finishedAt) row.finished_at = finishedAt;
 
     const { data, error } = await supabase
       .from('user_books')
-      .upsert(
-        {
-          user_id: userId,
-          book_id,
-          status,
-          started_at: started_at || (status === 'reading' ? new Date().toISOString().split('T')[0] : null),
-        },
-        { onConflict: 'user_id,book_id' }
-      )
+      .upsert(row, { onConflict: 'user_id,book_id' })
       .select()
       .single();
-
     if (error) throw error;
+
+    await safeRecompute('library add', () => recomputeGenreConnections(userId, supabase, serviceClient));
 
     return Response.json({ data }, { status: 201 });
   } catch (error) {
@@ -101,32 +107,33 @@ export async function POST(request) {
 /**
  * PATCH /api/library
  *
- * Update a book in the user's library (status, progress, rating, dates).
- * Body: { id, status?, progress?, rating?, started_at?, finished_at? }
+ * Update a book in the library.
+ * Body: { id, status?, progress?, rating?, started_at?, finished_at?, today? }
  */
 export async function PATCH(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
+    const body = await readJson(request);
 
-    const { id, ...updates } = body;
+    const id = requireUuid(body.id, 'id');
+    const today = resolveToday(body.today);
+    const updates = {};
 
-    if (!id) {
-      return Response.json(
-        { error: 'id (user_books.id) is required' },
-        { status: 400 }
-      );
+    if (body.status !== undefined) updates.status = requireStatus(body.status);
+    if (body.progress !== undefined) {
+      updates.progress = optionalNumber(body.progress, 'progress', { min: 0, max: 100000 }) ?? 0;
+    }
+    if (body.rating !== undefined) updates.rating = optionalRating(body.rating);
+    if (body.started_at !== undefined) updates.started_at = optionalDate(body.started_at, 'started_at');
+    if (body.finished_at !== undefined) updates.finished_at = optionalDate(body.finished_at, 'finished_at');
+
+    if (Object.keys(updates).length === 0) {
+      throw new ApiError(400, 'Nothing to update. Allowed: status, progress, rating, started_at, finished_at');
     }
 
-    // Auto-set finished_at when status changes to 'read'
-    if (updates.status === 'read' && !updates.finished_at) {
-      updates.finished_at = new Date().toISOString().split('T')[0];
-    }
-
-    // Auto-set started_at when status changes to 'reading'
-    if (updates.status === 'reading' && !updates.started_at) {
-      updates.started_at = new Date().toISOString().split('T')[0];
-    }
+    // Sensible dates when the status moves, unless the caller set them.
+    if (updates.status === 'read' && body.finished_at === undefined) updates.finished_at = today;
+    if (updates.status === 'reading' && body.started_at === undefined) updates.started_at = today;
 
     const { data, error } = await supabase
       .from('user_books')
@@ -135,7 +142,6 @@ export async function PATCH(request) {
       .eq('user_id', userId)
       .select()
       .single();
-
     if (error) throw error;
 
     return Response.json({ data });
@@ -147,29 +153,36 @@ export async function PATCH(request) {
 /**
  * DELETE /api/library
  *
- * Remove a book from the user's library.
+ * Remove a book from the library, along with its constellation connections.
  * Body: { id }
  */
 export async function DELETE(request) {
   try {
-    const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
+    const { userId, supabase, serviceClient } = await getAuthenticatedClients();
+    const body = await readJson(request);
+    const id = requireUuid(body.id, 'id');
 
-    const { id } = body;
-    if (!id) {
-      return Response.json(
-        { error: 'id (user_books.id) is required' },
-        { status: 400 }
-      );
-    }
-
-    const { error } = await supabase
+    const { data: removed, error } = await supabase
       .from('user_books')
       .delete()
       .eq('id', id)
-      .eq('user_id', userId);
-
+      .eq('user_id', userId)
+      .select('book_id')
+      .maybeSingle();
     if (error) throw error;
+    if (!removed) throw new ApiError(404, 'Book not found in your library');
+
+    const { error: connError } = await supabase
+      .from('book_connections')
+      .delete()
+      .eq('user_id', userId)
+      .or(`from_book_id.eq.${removed.book_id},to_book_id.eq.${removed.book_id}`);
+    if (connError) console.error('Failed to clean up connections:', connError);
+
+    await safeRecompute('library remove', async () => {
+      await recomputeTagConnections(userId, supabase);
+      await recomputeGenreConnections(userId, supabase, serviceClient);
+    });
 
     return Response.json({ success: true });
   } catch (error) {

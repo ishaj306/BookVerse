@@ -30,8 +30,23 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files and secrets. Only .env.example (placeholders) may be committed.
 .env*
+!.env.example
+*.local
+*.key
+*.p12
+*.pfx
+*.pem
+credentials*.json
+service-account*.json
+secrets/
+
+# local tooling and database CLI state
+.claude/
+supabase/.temp/
+supabase/.branches/
+supabase/.env
 
 # vercel
 .vercel

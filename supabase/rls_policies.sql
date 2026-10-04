@@ -24,6 +24,7 @@ alter table goals enable row level security;
 -- Writes restricted to service role (populates after Google Books calls)
 -- ============================================================
 
+drop policy if exists "book_cache_select_all" on book_cache;
 create policy "book_cache_select_all"
   on book_cache for select
   to authenticated
@@ -36,16 +37,19 @@ create policy "book_cache_select_all"
 -- users: users can read/update their own profile
 -- ============================================================
 
+drop policy if exists "users_select_own" on users;
 create policy "users_select_own"
   on users for select
   to authenticated
   using ((auth.jwt() ->> 'sub') = id);
 
+drop policy if exists "users_insert_own" on users;
 create policy "users_insert_own"
   on users for insert
   to authenticated
   with check ((auth.jwt() ->> 'sub') = id);
 
+drop policy if exists "users_update_own" on users;
 create policy "users_update_own"
   on users for update
   to authenticated
@@ -56,22 +60,26 @@ create policy "users_update_own"
 -- user_books: users can CRUD their own library entries
 -- ============================================================
 
+drop policy if exists "user_books_select_own" on user_books;
 create policy "user_books_select_own"
   on user_books for select
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "user_books_insert_own" on user_books;
 create policy "user_books_insert_own"
   on user_books for insert
   to authenticated
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "user_books_update_own" on user_books;
 create policy "user_books_update_own"
   on user_books for update
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id)
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "user_books_delete_own" on user_books;
 create policy "user_books_delete_own"
   on user_books for delete
   to authenticated
@@ -81,22 +89,26 @@ create policy "user_books_delete_own"
 -- journal_entries: users can CRUD their own entries
 -- ============================================================
 
+drop policy if exists "journal_entries_select_own" on journal_entries;
 create policy "journal_entries_select_own"
   on journal_entries for select
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "journal_entries_insert_own" on journal_entries;
 create policy "journal_entries_insert_own"
   on journal_entries for insert
   to authenticated
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "journal_entries_update_own" on journal_entries;
 create policy "journal_entries_update_own"
   on journal_entries for update
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id)
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "journal_entries_delete_own" on journal_entries;
 create policy "journal_entries_delete_own"
   on journal_entries for delete
   to authenticated
@@ -106,22 +118,26 @@ create policy "journal_entries_delete_own"
 -- shelves: users can CRUD their own shelves
 -- ============================================================
 
+drop policy if exists "shelves_select_own" on shelves;
 create policy "shelves_select_own"
   on shelves for select
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "shelves_insert_own" on shelves;
 create policy "shelves_insert_own"
   on shelves for insert
   to authenticated
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "shelves_update_own" on shelves;
 create policy "shelves_update_own"
   on shelves for update
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id)
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "shelves_delete_own" on shelves;
 create policy "shelves_delete_own"
   on shelves for delete
   to authenticated
@@ -132,6 +148,7 @@ create policy "shelves_delete_own"
 -- Users can manage books on their own shelves
 -- ============================================================
 
+drop policy if exists "shelf_books_select_own" on shelf_books;
 create policy "shelf_books_select_own"
   on shelf_books for select
   to authenticated
@@ -143,6 +160,7 @@ create policy "shelf_books_select_own"
     )
   );
 
+drop policy if exists "shelf_books_insert_own" on shelf_books;
 create policy "shelf_books_insert_own"
   on shelf_books for insert
   to authenticated
@@ -154,6 +172,7 @@ create policy "shelf_books_insert_own"
     )
   );
 
+drop policy if exists "shelf_books_delete_own" on shelf_books;
 create policy "shelf_books_delete_own"
   on shelf_books for delete
   to authenticated
@@ -169,22 +188,26 @@ create policy "shelf_books_delete_own"
 -- reading_sessions: users can CRUD their own sessions
 -- ============================================================
 
+drop policy if exists "reading_sessions_select_own" on reading_sessions;
 create policy "reading_sessions_select_own"
   on reading_sessions for select
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "reading_sessions_insert_own" on reading_sessions;
 create policy "reading_sessions_insert_own"
   on reading_sessions for insert
   to authenticated
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "reading_sessions_update_own" on reading_sessions;
 create policy "reading_sessions_update_own"
   on reading_sessions for update
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id)
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "reading_sessions_delete_own" on reading_sessions;
 create policy "reading_sessions_delete_own"
   on reading_sessions for delete
   to authenticated
@@ -194,22 +217,26 @@ create policy "reading_sessions_delete_own"
 -- book_connections: users can CRUD their own connections
 -- ============================================================
 
+drop policy if exists "book_connections_select_own" on book_connections;
 create policy "book_connections_select_own"
   on book_connections for select
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "book_connections_insert_own" on book_connections;
 create policy "book_connections_insert_own"
   on book_connections for insert
   to authenticated
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "book_connections_update_own" on book_connections;
 create policy "book_connections_update_own"
   on book_connections for update
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id)
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "book_connections_delete_own" on book_connections;
 create policy "book_connections_delete_own"
   on book_connections for delete
   to authenticated
@@ -219,22 +246,26 @@ create policy "book_connections_delete_own"
 -- goals: users can CRUD their own goals
 -- ============================================================
 
+drop policy if exists "goals_select_own" on goals;
 create policy "goals_select_own"
   on goals for select
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "goals_insert_own" on goals;
 create policy "goals_insert_own"
   on goals for insert
   to authenticated
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "goals_update_own" on goals;
 create policy "goals_update_own"
   on goals for update
   to authenticated
   using ((auth.jwt() ->> 'sub') = user_id)
   with check ((auth.jwt() ->> 'sub') = user_id);
 
+drop policy if exists "goals_delete_own" on goals;
 create policy "goals_delete_own"
   on goals for delete
   to authenticated

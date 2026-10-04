@@ -1,28 +1,39 @@
-import { getAuthenticatedClients, handleApiError } from '@/lib/auth';
+import { getAuthenticatedClients, ensureUser, handleApiError } from '@/lib/auth';
+import { computeGoalProgress, requireGoalType } from '@/lib/goals';
+import { ApiError, readJson } from '@/lib/http';
+import { optionalDate, optionalInt, requireUuid } from '@/lib/validate';
+
+function currentYear() {
+  return new Date().getUTCFullYear();
+}
 
 /**
  * GET /api/goals?year=<year>
  *
- * Get the user's reading goals for a given year.
+ * The user's goals for a year. `current` is computed live from the user's
+ * books and sessions, not read from a stored counter.
  */
 export async function GET(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
     const { searchParams } = new URL(request.url);
-    const year = parseInt(
-      searchParams.get('year') || new Date().getFullYear().toString(),
-      10
-    );
+    const year = optionalInt(searchParams.get('year') ?? currentYear(), 'year', { min: 1900, max: 2200 });
 
     const { data, error } = await supabase
       .from('goals')
       .select('*')
       .eq('user_id', userId)
       .eq('year', year);
-
     if (error) throw error;
 
-    return Response.json({ data: data || [] });
+    const goals = await Promise.all(
+      (data || []).map(async (goal) => ({
+        ...goal,
+        current: await computeGoalProgress(supabase, userId, goal.type, goal.year),
+      }))
+    );
+
+    return Response.json({ data: goals });
   } catch (error) {
     return handleApiError(error);
   }
@@ -31,82 +42,32 @@ export async function GET(request) {
 /**
  * POST /api/goals
  *
- * Create or update a reading goal.
+ * Create or update the goal for a type and year (one per type per year).
  * Body: { type, target, year?, deadline? }
  */
 export async function POST(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
+    const body = await readJson(request);
 
-    const { type, target, year, deadline } = body;
+    const type = requireGoalType(body.type);
+    const target = optionalInt(body.target, 'target', { min: 1, max: 1_000_000 });
+    if (!target) throw new ApiError(400, 'target is required');
+    const year = optionalInt(body.year ?? currentYear(), 'year', { min: 1900, max: 2200 });
+    const deadline = optionalDate(body.deadline, 'deadline');
 
-    if (!type || !target) {
-      return Response.json(
-        { error: 'type and target are required' },
-        { status: 400 }
-      );
-    }
+    await ensureUser(userId, supabase);
 
-    const goalYear = year || new Date().getFullYear();
+    const current = await computeGoalProgress(supabase, userId, type, year);
 
-    // Calculate current progress based on goal type
-    let current = 0;
-    if (type === 'yearly_books') {
-      const { count } = await supabase
-        .from('user_books')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('status', 'read')
-        .gte('finished_at', `${goalYear}-01-01`)
-        .lte('finished_at', `${goalYear}-12-31`);
-
-      current = count || 0;
-    } else if (type === 'yearly_pages') {
-      const { data: sessions } = await supabase
-        .from('reading_sessions')
-        .select('pages_read')
-        .eq('user_id', userId)
-        .gte('session_date', `${goalYear}-01-01`)
-        .lte('session_date', `${goalYear}-12-31`);
-
-      current = (sessions || []).reduce((sum, s) => sum + (s.pages_read || 0), 0);
-    }
-
-    // Upsert: one goal per type per year
-    const { data: existing } = await supabase
+    const { data, error } = await supabase
       .from('goals')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('type', type)
-      .eq('year', goalYear)
+      .upsert(
+        { user_id: userId, type, target, year, deadline, current },
+        { onConflict: 'user_id,type,year' }
+      )
+      .select()
       .single();
-
-    let data, error;
-
-    if (existing) {
-      ({ data, error } = await supabase
-        .from('goals')
-        .update({ target, current, deadline: deadline || null })
-        .eq('id', existing.id)
-        .eq('user_id', userId)
-        .select()
-        .single());
-    } else {
-      ({ data, error } = await supabase
-        .from('goals')
-        .insert({
-          user_id: userId,
-          type,
-          target,
-          current,
-          year: goalYear,
-          deadline: deadline || null,
-        })
-        .select()
-        .single());
-    }
-
     if (error) throw error;
 
     return Response.json({ data }, { status: 201 });
@@ -118,28 +79,15 @@ export async function POST(request) {
 /**
  * DELETE /api/goals
  *
- * Delete a goal.
  * Body: { id }
  */
 export async function DELETE(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
+    const body = await readJson(request);
+    const id = requireUuid(body.id, 'id');
 
-    const { id } = body;
-    if (!id) {
-      return Response.json(
-        { error: 'id (goals.id) is required' },
-        { status: 400 }
-      );
-    }
-
-    const { error } = await supabase
-      .from('goals')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId);
-
+    const { error } = await supabase.from('goals').delete().eq('id', id).eq('user_id', userId);
     if (error) throw error;
 
     return Response.json({ success: true });

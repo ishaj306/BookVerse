@@ -1,48 +1,25 @@
 import { getAuthenticatedClients, handleApiError } from '@/lib/auth';
-import {
-  getConstellationGraph,
-  recomputeTagConnections,
-  recomputeGenreConnections,
-} from '@/lib/constellation';
+import { getConstellationGraph } from '@/lib/constellation';
+import { optionalInt } from '@/lib/validate';
 
 /**
- * GET /api/constellation
+ * GET /api/constellation?year=<year>
  *
- * Get the full constellation graph data for the authenticated user.
- * Returns { nodes, edges } ready for d3-force rendering.
+ * The constellation graph for the authenticated user: { nodes, edges, topTags }.
+ * Nodes carry startedAt/finishedAt so the client can draw a time axis.
+ * `year` limits the graph to books finished that year.
  */
-export async function GET() {
+export async function GET(request) {
   try {
     const { userId, supabase, serviceClient } = await getAuthenticatedClients();
+    const { searchParams } = new URL(request.url);
+    const year = optionalInt(searchParams.get('year'), 'year', { min: 1900, max: 2200 });
 
-    const graph = await getConstellationGraph(userId, supabase, serviceClient);
+    const graph = await getConstellationGraph(userId, supabase, serviceClient, {
+      year: year || undefined,
+    });
 
     return Response.json(graph);
-  } catch (error) {
-    return handleApiError(error);
-  }
-}
-
-/**
- * POST /api/constellation/recompute
- *
- * Force a full recomputation of all constellation edges (tags + genres).
- * Use this if edges get out of sync or after bulk imports.
- */
-export async function POST() {
-  try {
-    const { userId, supabase, serviceClient } = await getAuthenticatedClients();
-
-    const [tagResult, genreResult] = await Promise.all([
-      recomputeTagConnections(userId, supabase),
-      recomputeGenreConnections(userId, supabase, serviceClient),
-    ]);
-
-    return Response.json({
-      success: true,
-      tagEdgesCreated: tagResult.edgesCreated,
-      genreEdgesCreated: genreResult.edgesCreated,
-    });
   } catch (error) {
     return handleApiError(error);
   }

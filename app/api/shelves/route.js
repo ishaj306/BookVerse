@@ -1,9 +1,17 @@
-import { getAuthenticatedClients, handleApiError } from '@/lib/auth';
+import { getAuthenticatedClients, ensureUser, handleApiError } from '@/lib/auth';
+import { ApiError, readJson } from '@/lib/http';
+import { optionalText, requireUuid } from '@/lib/validate';
+
+function requireName(value) {
+  const name = optionalText(value, 'name', 80);
+  if (!name) throw new ApiError(400, 'Shelf name is required');
+  return name;
+}
 
 /**
  * GET /api/shelves
  *
- * Get all custom shelves for the authenticated user.
+ * All custom shelves for the user, each with a book count.
  */
 export async function GET() {
   try {
@@ -14,14 +22,11 @@ export async function GET() {
       .select('*, shelf_books(book_id)')
       .eq('user_id', userId)
       .order('created_at', { ascending: true });
-
     if (error) throw error;
 
-    // Transform: include book count per shelf
-    const shelves = (data || []).map((shelf) => ({
+    const shelves = (data || []).map(({ shelf_books, ...shelf }) => ({
       ...shelf,
-      book_count: shelf.shelf_books?.length || 0,
-      shelf_books: undefined, // Remove raw join data
+      book_count: shelf_books?.length || 0,
     }));
 
     return Response.json({ data: shelves });
@@ -33,33 +38,23 @@ export async function GET() {
 /**
  * POST /api/shelves
  *
- * Create a new custom shelf.
  * Body: { name, description? }
  */
 export async function POST(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
+    const body = await readJson(request);
 
-    const { name, description } = body;
+    const name = requireName(body.name);
+    const description = optionalText(body.description, 'description', 500);
 
-    if (!name || !name.trim()) {
-      return Response.json(
-        { error: 'Shelf name is required' },
-        { status: 400 }
-      );
-    }
+    await ensureUser(userId, supabase);
 
     const { data, error } = await supabase
       .from('shelves')
-      .insert({
-        user_id: userId,
-        name: name.trim(),
-        description: description || null,
-      })
+      .insert({ user_id: userId, name, description })
       .select()
       .single();
-
     if (error) throw error;
 
     return Response.json({ data }, { status: 201 });
@@ -71,31 +66,21 @@ export async function POST(request) {
 /**
  * PATCH /api/shelves
  *
- * Update a shelf's name/description.
  * Body: { id, name?, description? }
  */
 export async function PATCH(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
+    const body = await readJson(request);
 
-    const { id, ...updates } = body;
-
-    if (!id) {
-      return Response.json(
-        { error: 'id (shelves.id) is required' },
-        { status: 400 }
-      );
+    const id = requireUuid(body.id, 'id');
+    const updates = {};
+    if (body.name !== undefined) updates.name = requireName(body.name);
+    if (body.description !== undefined) {
+      updates.description = optionalText(body.description, 'description', 500);
     }
-
-    if (updates.name !== undefined) {
-      updates.name = updates.name.trim();
-      if (!updates.name) {
-        return Response.json(
-          { error: 'Shelf name cannot be empty' },
-          { status: 400 }
-        );
-      }
+    if (Object.keys(updates).length === 0) {
+      throw new ApiError(400, 'Nothing to update. Allowed: name, description');
     }
 
     const { data, error } = await supabase
@@ -105,7 +90,6 @@ export async function PATCH(request) {
       .eq('user_id', userId)
       .select()
       .single();
-
     if (error) throw error;
 
     return Response.json({ data });
@@ -117,28 +101,16 @@ export async function PATCH(request) {
 /**
  * DELETE /api/shelves
  *
- * Delete a shelf (cascade deletes shelf_books entries).
+ * Deletes the shelf (its shelf_books rows cascade). Books stay in the library.
  * Body: { id }
  */
 export async function DELETE(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
+    const body = await readJson(request);
+    const id = requireUuid(body.id, 'id');
 
-    const { id } = body;
-    if (!id) {
-      return Response.json(
-        { error: 'id (shelves.id) is required' },
-        { status: 400 }
-      );
-    }
-
-    const { error } = await supabase
-      .from('shelves')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId);
-
+    const { error } = await supabase.from('shelves').delete().eq('id', id).eq('user_id', userId);
     if (error) throw error;
 
     return Response.json({ success: true });

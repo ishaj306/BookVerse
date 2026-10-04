@@ -1,54 +1,50 @@
 import { getAuthenticatedClients, handleApiError } from '@/lib/auth';
+import { ApiError, readJson } from '@/lib/http';
+import { requireUuid } from '@/lib/validate';
+
+/** Load a shelf the user owns, or throw a 404. */
+async function requireShelf(supabase, userId, shelfId) {
+  requireUuid(shelfId, 'shelf id');
+  const { data, error } = await supabase
+    .from('shelves')
+    .select('id')
+    .eq('id', shelfId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new ApiError(404, 'Shelf not found');
+}
 
 /**
  * GET /api/shelves/[id]/books
  *
- * Get all books in a specific shelf, with full book_cache data.
+ * Books on a shelf, with full book_cache data.
  */
 export async function GET(request, { params }) {
   try {
     const { userId, supabase, serviceClient } = await getAuthenticatedClients();
     const { id: shelfId } = await params;
+    await requireShelf(supabase, userId, shelfId);
 
-    // Verify shelf ownership
-    const { data: shelf, error: shelfError } = await supabase
-      .from('shelves')
-      .select('id')
-      .eq('id', shelfId)
-      .eq('user_id', userId)
-      .single();
-
-    if (shelfError || !shelf) {
-      return Response.json({ error: 'Shelf not found' }, { status: 404 });
-    }
-
-    // Get shelf books
     const { data: shelfBooks, error } = await supabase
       .from('shelf_books')
       .select('book_id, added_at')
       .eq('shelf_id', shelfId)
       .order('added_at', { ascending: false });
-
     if (error) throw error;
 
-    // Enrich with book_cache data
-    if (shelfBooks && shelfBooks.length > 0) {
-      const bookIds = shelfBooks.map((sb) => sb.book_id);
-      const { data: books } = await serviceClient
-        .from('book_cache')
-        .select('*')
-        .in('id', bookIds);
+    if (!shelfBooks || shelfBooks.length === 0) return Response.json({ data: [] });
 
-      const bookMap = new Map((books || []).map((b) => [b.id, b]));
-      const enriched = shelfBooks.map((sb) => ({
-        ...sb,
-        book: bookMap.get(sb.book_id) || null,
-      }));
+    const { data: books, error: booksError } = await serviceClient
+      .from('book_cache')
+      .select('*')
+      .in('id', shelfBooks.map((sb) => sb.book_id));
+    if (booksError) throw booksError;
 
-      return Response.json({ data: enriched });
-    }
-
-    return Response.json({ data: [] });
+    const bookMap = new Map((books || []).map((b) => [b.id, b]));
+    return Response.json({
+      data: shelfBooks.map((sb) => ({ ...sb, book: bookMap.get(sb.book_id) || null })),
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -57,44 +53,30 @@ export async function GET(request, { params }) {
 /**
  * POST /api/shelves/[id]/books
  *
- * Add a book to a shelf.
- * Body: { book_id }
+ * Add a library book to a shelf. Body: { book_id }
  */
 export async function POST(request, { params }) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
     const { id: shelfId } = await params;
-    const body = await request.json();
+    const body = await readJson(request);
+    const bookId = requireUuid(body.book_id, 'book_id');
 
-    const { book_id } = body;
-    if (!book_id) {
-      return Response.json(
-        { error: 'book_id is required' },
-        { status: 400 }
-      );
-    }
+    await requireShelf(supabase, userId, shelfId);
 
-    // Verify shelf ownership
-    const { data: shelf, error: shelfError } = await supabase
-      .from('shelves')
-      .select('id')
-      .eq('id', shelfId)
+    const { count, error: libraryError } = await supabase
+      .from('user_books')
+      .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .single();
-
-    if (shelfError || !shelf) {
-      return Response.json({ error: 'Shelf not found' }, { status: 404 });
-    }
+      .eq('book_id', bookId);
+    if (libraryError) throw libraryError;
+    if (!count) throw new ApiError(400, 'Add this book to your library first');
 
     const { data, error } = await supabase
       .from('shelf_books')
-      .upsert(
-        { shelf_id: shelfId, book_id },
-        { onConflict: 'shelf_id,book_id' }
-      )
+      .upsert({ shelf_id: shelfId, book_id: bookId }, { onConflict: 'shelf_id,book_id' })
       .select()
       .single();
-
     if (error) throw error;
 
     return Response.json({ data }, { status: 201 });
@@ -106,41 +88,22 @@ export async function POST(request, { params }) {
 /**
  * DELETE /api/shelves/[id]/books
  *
- * Remove a book from a shelf.
- * Body: { book_id }
+ * Remove a book from a shelf. Body: { book_id }
  */
 export async function DELETE(request, { params }) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
     const { id: shelfId } = await params;
-    const body = await request.json();
+    const body = await readJson(request);
+    const bookId = requireUuid(body.book_id, 'book_id');
 
-    const { book_id } = body;
-    if (!book_id) {
-      return Response.json(
-        { error: 'book_id is required' },
-        { status: 400 }
-      );
-    }
-
-    // Verify shelf ownership
-    const { data: shelf, error: shelfError } = await supabase
-      .from('shelves')
-      .select('id')
-      .eq('id', shelfId)
-      .eq('user_id', userId)
-      .single();
-
-    if (shelfError || !shelf) {
-      return Response.json({ error: 'Shelf not found' }, { status: 404 });
-    }
+    await requireShelf(supabase, userId, shelfId);
 
     const { error } = await supabase
       .from('shelf_books')
       .delete()
       .eq('shelf_id', shelfId)
-      .eq('book_id', book_id);
-
+      .eq('book_id', bookId);
     if (error) throw error;
 
     return Response.json({ success: true });

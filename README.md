@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BookVerse
 
-## Getting Started
+A personal reading archive. The differentiator is the **Reading Constellation**: a graph of your books joined by shared tags, genres and links you draw yourself. See `docs/BookVerse PRD.html`.
 
-First, run the development server:
+Stack: Next.js 16 (App Router), Clerk (auth), Supabase (Postgres + RLS), Google Books with an Open Library fallback.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Setup
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. `npm install`
+2. Copy `.env.example` to `.env.local` and fill it in.
+3. In the Supabase SQL Editor run, in order:
+   1. `supabase/schema.sql`
+   2. `supabase/rls_policies.sql`
+   3. `supabase/migrations/002_backend_hardening.sql`
+   All three are safe to re-run.
+4. In Supabase, add Clerk as a **third-party auth provider** (Authentication > Sign In / Up > Third-Party Auth). The API then uses Clerk's plain session token. If you still use the older JWT template, set `CLERK_SUPABASE_JWT_TEMPLATE=supabase`.
+5. `npm run dev`, then `npm test` for the unit tests.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## API
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Every route requires a signed-in user except `/api/health`. Errors are `{ "error": "..." }` with a 400 (bad input), 401, 404, 409, 429 or 500 status. Dates are `YYYY-MM-DD`. Send the reader's **local** date as `today` on routes that accept it, so streaks and auto-set dates are right in their timezone.
 
-## Learn More
+| Route | Methods | Notes |
+| --- | --- | --- |
+| `/api/user` | GET, PATCH | Profile; created on first GET from the Clerk name and avatar |
+| `/api/books/search?q=` | GET | Cache, then Google Books, then Open Library. Returns `source`. 30 requests/min |
+| `/api/books/[id]` | GET | One cached book |
+| `/api/library` | GET, POST, PATCH, DELETE | GET takes `status`, `limit`, `offset`. DELETE also removes the book's constellation edges |
+| `/api/journal` | GET, POST, PATCH, DELETE | GET takes `book_id`, `tag`. Tags are normalised; the book must be in the library |
+| `/api/tags?q=` | GET | `[{ tag, count }]` for autocomplete |
+| `/api/sessions` | GET, POST, DELETE | Logging pages advances progress; deleting takes them back |
+| `/api/shelves` | GET, POST, PATCH, DELETE | |
+| `/api/shelves/[id]/books` | GET, POST, DELETE | |
+| `/api/connections` | GET, POST, DELETE | Manual "this reminded me of" links |
+| `/api/constellation` | GET | `{ nodes, edges, topTags }`; `?year=` filters by finished year |
+| `/api/constellation/recompute` | POST | Rebuild computed edges |
+| `/api/analytics` | GET | `?year=&today=`. Streaks use all sessions, not just the year |
+| `/api/insights` | GET | Top tags and per-quarter reading phases, no LLM |
+| `/api/goals` | GET, POST, DELETE | One goal per type per year. `current` is computed live |
+| `/api/import/goodreads` | POST | `{ csv, offset }`; call again with `nextOffset` until it is `null` |
 
-To learn more about Next.js, take a look at the following resources:
+## Notes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Constellation edges are synced by diff (upsert, then delete stale), never wipe-and-rebuild.
+- Genre edges are weighted at half a tag edge and skipped for genres that cover most of a library.
+- Rate limiting is in memory per server instance. Use a shared store if you deploy several instances.
+- `proxy.js` is Next 16's replacement for `middleware.js`.

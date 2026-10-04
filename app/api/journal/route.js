@@ -1,26 +1,40 @@
-import { getAuthenticatedClients, handleApiError } from '@/lib/auth';
-import { recomputeTagConnections } from '@/lib/constellation';
+import { getAuthenticatedClients, ensureUser, handleApiError } from '@/lib/auth';
+import { recomputeTagConnections, safeRecompute } from '@/lib/constellation';
+import { ApiError, readJson } from '@/lib/http';
+import {
+  normalizeTag,
+  normalizeTags,
+  optionalInt,
+  optionalText,
+  requireUuid,
+} from '@/lib/validate';
+
+const MAX_CONTENT = 10000;
+const MAX_QUOTE = 2000;
 
 /**
- * GET /api/journal?book_id=<book_id>
+ * GET /api/journal?book_id=<id>&tag=<tag>&limit=<n>&offset=<n>
  *
- * Get all journal entries for the user, optionally filtered by book.
+ * Get the user's journal entries (inscriptions), newest first.
  */
 export async function GET(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
     const { searchParams } = new URL(request.url);
     const bookId = searchParams.get('book_id');
+    const tag = searchParams.get('tag');
+    const limit = optionalInt(searchParams.get('limit') ?? 100, 'limit', { min: 1, max: 500 });
+    const offset = optionalInt(searchParams.get('offset') ?? 0, 'offset', { min: 0 });
 
     let query = supabase
       .from('journal_entries')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
-    if (bookId) {
-      query = query.eq('book_id', bookId);
-    }
+    if (bookId) query = query.eq('book_id', requireUuid(bookId, 'book_id'));
+    if (tag) query = query.contains('tags', [normalizeTag(tag)]);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -36,46 +50,42 @@ export async function GET(request) {
  *
  * Create a new journal entry (inscription).
  * Body: { book_id, content?, quote?, page_number?, tags?[] }
- *
- * After creation, recomputes shared-tag constellation edges.
+ * The book must already be in the user's library.
  */
 export async function POST(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
+    const body = await readJson(request);
 
-    const { book_id, content, quote, page_number, tags } = body;
+    const bookId = requireUuid(body.book_id, 'book_id');
+    const content = optionalText(body.content, 'content', MAX_CONTENT);
+    const quote = optionalText(body.quote, 'quote', MAX_QUOTE);
+    const pageNumber = optionalInt(body.page_number, 'page_number', { min: 0, max: 100000 });
+    const tags = normalizeTags(body.tags);
 
-    if (!book_id) {
-      return Response.json(
-        { error: 'book_id is required' },
-        { status: 400 }
-      );
+    if (!content && !quote) {
+      throw new ApiError(400, 'An inscription needs some content or a quote');
     }
+
+    await ensureUser(userId, supabase);
+
+    const { count, error: libraryError } = await supabase
+      .from('user_books')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('book_id', bookId);
+    if (libraryError) throw libraryError;
+    if (!count) throw new ApiError(400, 'Add this book to your library before writing about it');
 
     const { data, error } = await supabase
       .from('journal_entries')
-      .insert({
-        user_id: userId,
-        book_id,
-        content: content || null,
-        quote: quote || null,
-        page_number: page_number || null,
-        tags: tags || [],
-      })
+      .insert({ user_id: userId, book_id: bookId, content, quote, page_number: pageNumber, tags })
       .select()
       .single();
-
     if (error) throw error;
 
-    // Recompute constellation edges if tags were provided
-    if (tags && tags.length > 0) {
-      try {
-        await recomputeTagConnections(userId, supabase);
-      } catch (constellationError) {
-        // Log but don't fail the request — entry was saved successfully
-        console.error('Constellation recompute failed:', constellationError);
-      }
+    if (tags.length > 0) {
+      await safeRecompute('journal create', () => recomputeTagConnections(userId, supabase));
     }
 
     return Response.json({ data }, { status: 201 });
@@ -93,15 +103,20 @@ export async function POST(request) {
 export async function PATCH(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
+    const body = await readJson(request);
 
-    const { id, ...updates } = body;
+    const id = requireUuid(body.id, 'id');
+    const updates = {};
 
-    if (!id) {
-      return Response.json(
-        { error: 'id (journal_entries.id) is required' },
-        { status: 400 }
-      );
+    if (body.content !== undefined) updates.content = optionalText(body.content, 'content', MAX_CONTENT);
+    if (body.quote !== undefined) updates.quote = optionalText(body.quote, 'quote', MAX_QUOTE);
+    if (body.page_number !== undefined) {
+      updates.page_number = optionalInt(body.page_number, 'page_number', { min: 0, max: 100000 });
+    }
+    if (body.tags !== undefined) updates.tags = normalizeTags(body.tags);
+
+    if (Object.keys(updates).length === 0) {
+      throw new ApiError(400, 'Nothing to update. Allowed: content, quote, page_number, tags');
     }
 
     const { data, error } = await supabase
@@ -111,16 +126,10 @@ export async function PATCH(request) {
       .eq('user_id', userId)
       .select()
       .single();
-
     if (error) throw error;
 
-    // Recompute constellation edges if tags changed
     if (updates.tags !== undefined) {
-      try {
-        await recomputeTagConnections(userId, supabase);
-      } catch (constellationError) {
-        console.error('Constellation recompute failed:', constellationError);
-      }
+      await safeRecompute('journal update', () => recomputeTagConnections(userId, supabase));
     }
 
     return Response.json({ data });
@@ -138,30 +147,17 @@ export async function PATCH(request) {
 export async function DELETE(request) {
   try {
     const { userId, supabase } = await getAuthenticatedClients();
-    const body = await request.json();
-
-    const { id } = body;
-    if (!id) {
-      return Response.json(
-        { error: 'id (journal_entries.id) is required' },
-        { status: 400 }
-      );
-    }
+    const body = await readJson(request);
+    const id = requireUuid(body.id, 'id');
 
     const { error } = await supabase
       .from('journal_entries')
       .delete()
       .eq('id', id)
       .eq('user_id', userId);
-
     if (error) throw error;
 
-    // Recompute constellation edges after deletion
-    try {
-      await recomputeTagConnections(userId, supabase);
-    } catch (constellationError) {
-      console.error('Constellation recompute failed:', constellationError);
-    }
+    await safeRecompute('journal delete', () => recomputeTagConnections(userId, supabase));
 
     return Response.json({ success: true });
   } catch (error) {
