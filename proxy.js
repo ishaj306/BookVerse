@@ -6,9 +6,17 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',   // Sign in
   '/sign-up(.*)',   // Sign up
   '/api/health',    // Health check
+  '/mock(.*)',      // Development review mode (404s in production)
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
+  // Development only: review mode (see /mock) lets the signed-in screens render
+  // with sample data. Never active in a production build, and API routes still
+  // check the user themselves.
+  if (process.env.NODE_ENV !== 'production' && request.cookies.get('bv_mock')?.value === '1') {
+    return;
+  }
+
   if (!isPublicRoute(request)) {
     await auth.protect();
   }

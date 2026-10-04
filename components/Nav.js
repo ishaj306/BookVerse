@@ -15,12 +15,16 @@ const LINKS = [
   { href: '/insights', label: 'Insights', short: 'Insights', icon: 'M5 20V11M12 20V5M19 20v-7' },
 ];
 
+/** Pages that open on the night sky get a dark bar so the two join up. */
+const DARK_ROUTES = ['/dashboard', '/constellation'];
+
 export default function Nav() {
   const pathname = usePathname();
   const router = useRouter();
   const [query, setQuery] = useState('');
   const { data } = useApi('/api/user');
   const user = data?.data;
+  const dark = DARK_ROUTES.includes(pathname);
 
   const isOn = (href) => pathname === href || (href === '/library' && pathname.startsWith('/book'));
 
@@ -32,7 +36,7 @@ export default function Nav() {
 
   return (
     <>
-      <header className="nav">
+      <header className={`nav ${dark ? 'nav-dark' : ''}`}>
         <Link className="logo" href="/dashboard">
           <Bow width={40} />
           BookVerse
@@ -45,7 +49,7 @@ export default function Nav() {
           ))}
         </nav>
         <form className="search" onSubmit={search} role="search">
-          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E4E58" strokeWidth="2" strokeLinecap="round">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <circle cx="11" cy="11" r="7" />
             <path d="M20 20l-4-4" />
           </svg>

@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredByHeader: false,
+  async redirects() {
+    // Browsers ask for /favicon.ico regardless of the <link>; point them at the bow icon.
+    return [{ source: '/favicon.ico', destination: '/icon.svg', permanent: false }];
+  },
   async headers() {
     return [
       {

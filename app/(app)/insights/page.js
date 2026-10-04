@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import Heatmap from '@/components/Heatmap';
+import PageHead from '@/components/PageHead';
+import Reveal from '@/components/Reveal';
 import { ErrorNote, Loading } from '@/components/States';
 import { PearlRating } from '@/components/ornaments';
 import { localToday, titleCase, useApi } from '@/lib/client-api';
@@ -26,86 +28,85 @@ export default function Insights() {
 
   return (
     <div className="page">
-      <div className="row-between">
-        <div>
-          <span className="eyebrow">{year === thisYear ? `${year} so far` : year}</span>
-          <h1 className="h-page">Your reading, <em className="accent">in pearls</em></h1>
-        </div>
-        <div className="row" role="group" aria-label="Year">
-          <button type="button" className="chip" onClick={() => setYear(year - 1)} aria-label="Previous year">‹ {year - 1}</button>
-          <button type="button" className="chip" disabled={year >= thisYear} onClick={() => setYear(year + 1)} aria-label="Next year">{year + 1} ›</button>
-        </div>
-      </div>
+      <PageHead eyebrow={year === thisYear ? `${year} so far` : String(year)} title={<>Your reading, <em className="accent">in pearls</em></>}>
+        <button type="button" className="chip chip-small chip-outline" onClick={() => setYear(year - 1)} aria-label="Previous year">‹ {year - 1}</button>
+        <button type="button" className="chip chip-small chip-outline" disabled={year >= thisYear} onClick={() => setYear(year + 1)} aria-label="Next year">{year + 1} ›</button>
+      </PageHead>
       <ErrorNote message={analytics.error || insights.error} />
 
       {analytics.loading || !a ? <Loading /> : (
         <>
-          <div className="grid g-4 g-keep-2" style={{ gap: 16 }}>
-            <div className="card-pink"><span className="eyebrow">Books read</span><div className="stat" style={{ fontSize: 56, marginTop: 6 }}>{a.booksReadCount}</div></div>
-            <div className="card"><span className="eyebrow">Pages</span><div className="stat" style={{ fontSize: 56, marginTop: 6 }}>{a.totalPages.toLocaleString()}</div></div>
-            <div className="card stack" style={{ gap: 8 }}>
+          <Reveal className="stats-row">
+            <div className="stat-cell"><span className="eyebrow">Books read</span><span className="stat">{a.booksReadCount}</span></div>
+            <div className="stat-cell"><span className="eyebrow">Pages</span><span className="stat">{a.totalPages.toLocaleString()}</span></div>
+            <div className="stat-cell">
               <span className="eyebrow">Average rating</span>
-              <PearlRating value={a.averageRating || 0} size={20} />
-              <div className="stat" style={{ fontSize: 30 }}>{a.averageRating ?? '–'}</div>
+              <span className="stat">{a.averageRating ?? '–'}</span>
+              <PearlRating value={a.averageRating || 0} size={14} />
             </div>
-            <div className="card-soft"><span className="eyebrow">Longest streak</span><div className="stat" style={{ fontSize: 56, marginTop: 6 }}>{a.streak.longest}<span className="muted" style={{ fontSize: 22 }}> days</span></div></div>
-          </div>
+            <div className="stat-cell"><span className="eyebrow">Longest streak</span><span className="stat">{a.streak.longest}<span className="stat-unit"> days</span></span></div>
+          </Reveal>
 
           <div className="grid g-main">
-            <section className="card stack" style={{ gap: 18 }}>
-              <div className="row-between" style={{ alignItems: 'baseline' }}><h3 style={{ fontSize: 30 }}>Books per month</h3><span className="muted" style={{ fontSize: 13 }}>{a.totalMinutes ? `${Math.round(a.totalMinutes / 60)} hours read` : ''}</span></div>
+            <Reveal className="stack" style={{ gap: 18 }}>
+              <div className="row-between" style={{ alignItems: 'baseline' }}>
+                <h2 className="h-sec">Books per month</h2>
+                <span className="muted" style={{ fontSize: 13 }}>{a.totalMinutes ? `${Math.round(a.totalMinutes / 60)} hours read` : ''}</span>
+              </div>
               <div className="bars" role="img" aria-label="Books finished each month">
                 {months.map((m) => (
                   <div key={m.month} className="bar">
                     <span className="num" style={{ fontSize: 12, fontWeight: 700, color: 'var(--rose-deep)' }}>{m.booksRead}</span>
-                    <i style={{ height: 24 + (m.booksRead / maxBooks) * 190 }} />
+                    <i style={{ height: 22 + (m.booksRead / maxBooks) * 170 }} />
                   </div>
                 ))}
               </div>
-              <div className="row" style={{ justifyContent: 'space-between', padding: '0 6px', fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>
-                {months.map((m) => <span key={m.month} style={{ flex: 1, textAlign: 'center' }}>{MONTHS[m.month - 1]}</span>)}
+              <div className="bar-labels">
+                {months.map((m) => <span key={m.month}>{MONTHS[m.month - 1]}</span>)}
               </div>
-            </section>
+            </Reveal>
 
-            <section className="card stack" style={{ gap: 16 }}>
-              <h3 style={{ fontSize: 30 }}>By genre</h3>
+            <Reveal className="stack" style={{ gap: 18 }}>
+              <h2 className="h-sec">By genre</h2>
               {genres.length === 0 && <p className="muted">Finish a book to see your genres.</p>}
-              {genres.map((g, i) => (
-                <div key={g.genre} className="stack" style={{ gap: 6 }}>
-                  <div className="row-between" style={{ alignItems: 'baseline', fontSize: 14, fontWeight: 600 }}><span>{titleCase(g.genre)}</span><span className="num muted">{Math.round((g.count / genreTotal) * 100)}%</span></div>
-                  <div className="meter"><i style={{ width: `${(g.count / genreTotal) * 100}%`, background: GENRE_COLORS[i % GENRE_COLORS.length] }} /></div>
-                </div>
-              ))}
-            </section>
+              <div className="stack" style={{ gap: 16 }}>
+                {genres.map((g, i) => (
+                  <div key={g.genre} className="stack" style={{ gap: 6 }}>
+                    <div className="row-between" style={{ alignItems: 'baseline', fontSize: 15, fontWeight: 600 }}><span>{titleCase(g.genre)}</span><span className="num muted">{Math.round((g.count / genreTotal) * 100)}%</span></div>
+                    <div className="meter"><i style={{ width: `${(g.count / genreTotal) * 100}%`, background: GENRE_COLORS[i % GENRE_COLORS.length] }} /></div>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
           </div>
 
-          <div className="grid g-main">
-            <section className="card stack">
-              <h3 style={{ fontSize: 30 }}>Your reading activity</h3>
-              <Heatmap data={a.heatmapData} today={year === thisYear ? today : `${year}-12-31`} />
-              {a.pagesPerActiveDay > 0 && <p className="muted" style={{ fontSize: 14 }}>About {a.pagesPerActiveDay} pages on the days you read.</p>}
-            </section>
-            <section className="card-pink stack" style={{ gap: 14 }}>
-              <span className="eyebrow">A pattern we noticed</span>
-              <p className="quote" style={{ fontSize: 30 }}>{insights.data?.headline || 'Tag your inscriptions and finish a few books. Patterns show up here.'}</p>
-              <div className="pstring" />
-              <Link className="btn btn-primary btn-sm" style={{ alignSelf: 'flex-start' }} href="/constellation">See your constellation</Link>
-            </section>
-          </div>
+          <Reveal className="stack" style={{ gap: 14 }}>
+            <div className="row-between" style={{ alignItems: 'baseline' }}>
+              <h2 className="h-sec">Reading activity</h2>
+              {a.pagesPerActiveDay > 0 && <span className="muted" style={{ fontSize: 13 }}>About {a.pagesPerActiveDay} pages on the days you read</span>}
+            </div>
+            <Heatmap data={a.heatmapData} today={year === thisYear ? today : `${year}-12-31`} />
+          </Reveal>
+
+          <Reveal className="night-band">
+            <span className="eyebrow">A pattern we noticed</span>
+            <p className="night-quote">{insights.data?.headline || 'Tag your inscriptions and finish a few books. Patterns show up here.'}</p>
+            <Link className="btn btn-glow btn-sm" href="/constellation">See it in your constellation</Link>
+          </Reveal>
 
           {phases.length > 0 && (
-            <section className="stack" style={{ gap: 16 }}>
+            <Reveal className="stack" style={{ gap: 28 }}>
               <h2 className="h-sec">Your reading phases</h2>
-              <div className="grid g-4">
+              <div className="timeline">
                 {phases.slice(0, 4).map((p) => (
-                  <article key={p.period} className="card stack" style={{ gap: 8 }}>
+                  <article key={p.period} className="phase">
                     <span className="eyebrow">{p.period.replace('-', ' ')}</span>
                     <span className="muted" style={{ fontSize: 13 }}>{p.books} {p.books === 1 ? 'book' : 'books'}</span>
                     <div className="row wrap" style={{ gap: 6 }}>{p.topTags.length ? p.topTags.map((t) => <span key={t.tag} className="tag">{t.tag}</span>) : <span className="muted" style={{ fontSize: 13 }}>No tags</span>}</div>
                   </article>
                 ))}
               </div>
-            </section>
+            </Reveal>
           )}
         </>
       )}

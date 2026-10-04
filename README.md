@@ -39,6 +39,21 @@ Every route requires a signed-in user except `/api/health`. Errors are `{ "error
 | `/api/goals` | GET, POST, DELETE | One goal per type per year. `current` is computed live |
 | `/api/import/goodreads` | POST | `{ csv, offset }`; call again with `nextOffset` until it is `null` |
 
+## Design
+
+Two worlds that join up: the **night** (a pink moon, a cottage with a lit window, your books as stars joined by threads) and the **day** (blush paper, ink, thin wooden ledges under your books).
+
+- `app/globals.css` is the whole design system: tokens at the top, then layout, components, the night scene, the constellation page, motion, and responsive rules.
+- `components/NightScene.js` is the signature scene used on the landing page, sign-in, the signed-in home and the 404 page. It reacts to the pointer and scrolling, and pauses itself when off screen.
+- `app/(app)/constellation/page.js` is the immersive sky: d3-force layout, pan and zoom (wheel, drag, pinch), hover to light a book's threads, tag themes, and covers that appear as you zoom in.
+- Everything respects `prefers-reduced-motion`.
+
+## Review mode (development only)
+
+To look at every signed-in screen without logging in or touching Supabase, run the dev server and open `/mock`, then choose **Enter with sample data**. Screens fill with sample books, changes are kept in memory only, and **Leave review mode** switches it off.
+
+It is blocked in production: `/mock` returns 404, its sample data is not part of the production bundle, and the login bypass in `proxy.js` is guarded by `NODE_ENV`.
+
 ## Notes
 
 - Constellation edges are synced by diff (upsert, then delete stale), never wipe-and-rebuild.

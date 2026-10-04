@@ -4,16 +4,11 @@ import Link from 'next/link';
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Cover from '@/components/Cover';
-import { Empty, ErrorNote, Loading } from '@/components/States';
-import { Rule } from '@/components/ornaments';
+import PageHead from '@/components/PageHead';
+import { Empty, ErrorNote, Loading, Skeleton } from '@/components/States';
 import { STATUSES, STATUS_LABELS, api, localToday, titleCase, useApi } from '@/lib/client-api';
 
-const COVER_HEIGHTS = [230, 270, 310, 250, 290];
-
-function coverHeight(book) {
-  const seed = [...String(book.title)].reduce((h, c) => h + c.charCodeAt(0), 0);
-  return COVER_HEIGHTS[seed % COVER_HEIGHTS.length];
-}
+const SUGGESTIONS = ['gothic', 'slow burn romance', 'mythology', 'poetry', 'dark academia', 'classics'];
 
 function Discover() {
   const router = useRouter();
@@ -47,56 +42,69 @@ function Discover() {
 
   return (
     <div className="page">
-      <div className="stack center" style={{ gap: 8 }}>
-        <span className="eyebrow">Discover</span>
-        <h1 className="h-page">Find your next <em className="accent">chapter</em></h1>
-      </div>
+      <PageHead eyebrow="Discover" title={<>Find your next <em className="accent">chapter</em></>} />
 
-      <form className="search" onSubmit={submit} role="search" style={{ flex: 'none', height: 60, maxWidth: 720, width: '100%', alignSelf: 'center', background: '#fff', boxShadow: 'inset 0 0 0 1.5px var(--pink-200)' }}>
-        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A8234B" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
-        <input aria-label="Search by title, author or ISBN" placeholder="Title, author or ISBN" value={input} onChange={(e) => setInput(e.target.value)} style={{ fontSize: 17 }} />
+      <form className="big-search" onSubmit={submit} role="search">
+        <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+        <input aria-label="Search by title, author or ISBN" placeholder="A title, an author, an ISBN…" value={input} onChange={(e) => setInput(e.target.value)} />
         <button className="btn btn-primary btn-sm" type="submit">Search</button>
       </form>
 
-      <ErrorNote message={results.error || message} />
-      <Rule />
+      <div className="pillrow pillrow-scroll" aria-label="Ideas to start with">
+        <span className="eyebrow" style={{ marginRight: 4 }}>Try</span>
+        {SUGGESTIONS.map((s) => (
+          <Link key={s} className="chip chip-small chip-outline" href={`/discover?q=${encodeURIComponent(s)}`}>{s}</Link>
+        ))}
+      </div>
 
-      {!q && <Empty title="What are you in the mood for?" text="Search for a title, an author or an ISBN. Books you find are saved so the next search is instant." />}
-      {results.loading && <Loading label="Searching the stacks…" />}
-      {q && !results.loading && !results.error && books.length === 0 && <Empty title="No books found" text="Try a different spelling, or search by author or ISBN." />}
+      <ErrorNote message={results.error || message} />
+
+      {!q && (
+        <Empty title="What are you in the mood for?" text="Search for a title, an author or an ISBN. Books you find are saved, so the next search is instant." />
+      )}
+
+      {results.loading && (
+        <div className="masonry" aria-busy="true">
+          {[300, 240, 280, 220, 300, 260, 240, 290].map((h, i) => (
+            <div key={i} className="stack" style={{ gap: 10 }}><Skeleton h={h} r={10} /><Skeleton w="70%" h={14} /><Skeleton w="45%" h={12} /></div>
+          ))}
+          <span className="sr-only" role="status">Searching the stacks…</span>
+        </div>
+      )}
+
+      {q && !results.loading && !results.error && books.length === 0 && (
+        <Empty title="No books found" text="Try a different spelling, or search by author or ISBN." />
+      )}
 
       {books.length > 0 && (
         <>
           <p className="muted" style={{ fontSize: 14 }}>
-            {books.length} results{results.data?.source === 'openlibrary' ? ' from Open Library' : ''}
+            {books.length} results for “{q}”{results.data?.source === 'openlibrary' ? ' · from Open Library' : ''}
           </p>
           <div className="masonry">
-            {books.map((book) => {
+            {books.map((book, i) => {
               const status = added[book.id] || inLibrary.get(book.id);
               return (
-                <article key={book.id} className="card book-card">
+                <figure key={book.id} className="book-fig rise" style={{ animationDelay: `${Math.min(i, 14) * 45}ms` }}>
                   <Link href={`/book/${book.id}`} aria-label={`Open ${book.title}`}>
-                    <Cover book={book} fill height={coverHeight(book)} style={{ borderRadius: '12px 16px 16px 12px' }} />
+                    <Cover book={book} fill interactive />
                   </Link>
-                  <div className="stack" style={{ gap: 2, padding: '0 4px' }}>
-                    <h3 style={{ fontSize: 22, lineHeight: 1.1 }}>{book.title}</h3>
-                    <span className="muted" style={{ fontSize: 13 }}>{book.author}</span>
-                  </div>
-                  <div className="row-between" style={{ padding: '0 4px 4px', alignItems: 'center' }}>
-                    {book.genres?.[0] ? <span className="tag">{titleCase(book.genres[0])}</span> : <span />}
-                  </div>
-                  {status ? (
-                    <div className="notice" style={{ textAlign: 'center' }}>On your shelf · {STATUS_LABELS[status]}</div>
-                  ) : (
-                    <div>
-                      <label className="sr-only" htmlFor={`shelve-${book.id}`}>Shelve {book.title}</label>
-                      <select id={`shelve-${book.id}`} className="input" style={{ height: 44, background: 'var(--rose-dark)', color: '#fff', borderColor: 'var(--rose-dark)', fontWeight: 600 }} defaultValue="" onChange={(e) => e.target.value && shelve(book, e.target.value)}>
-                        <option value="" disabled>Shelve as…</option>
-                        {STATUSES.map((s) => <option key={s} value={s} style={{ color: '#000' }}>{STATUS_LABELS[s]}</option>)}
-                      </select>
-                    </div>
-                  )}
-                </article>
+                  <figcaption>
+                    <h3>{book.title}</h3>
+                    <span className="muted">{book.author}{book.genres?.[0] ? ` · ${titleCase(book.genres[0])}` : ''}</span>
+                    {status ? (
+                      <span className="shelved">✓ {STATUS_LABELS[status]}</span>
+                    ) : (
+                      <>
+                        <label className="sr-only" htmlFor={`shelve-${book.id}`}>Shelve {book.title}</label>
+                        <select id={`shelve-${book.id}`} className="shelve-select" defaultValue="" onChange={(e) => e.target.value && shelve(book, e.target.value)}>
+                          <option value="" disabled>Shelve as…</option>
+                          {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                        </select>
+                      </>
+                    )}
+                  </figcaption>
+                </figure>
               );
             })}
           </div>

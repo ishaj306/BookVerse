@@ -1,15 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import Cover from '@/components/Cover';
+import { useMemo } from 'react';
 import Heatmap from '@/components/Heatmap';
-import { Empty, ErrorNote, Loading } from '@/components/States';
-import { Pearls, Rule } from '@/components/ornaments';
+import NightScene from '@/components/NightScene';
+import Reveal from '@/components/Reveal';
+import { ErrorNote, Loading } from '@/components/States';
+import { Pearls } from '@/components/ornaments';
 import { localToday, useApi } from '@/lib/client-api';
 
 function greeting() {
   const h = new Date().getHours();
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  return h < 5 ? 'Still up' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
 export default function Dashboard() {
@@ -17,133 +19,116 @@ export default function Dashboard() {
   const user = useApi('/api/user');
   const analytics = useApi(`/api/analytics?today=${today}`);
   const library = useApi('/api/library');
-  const journal = useApi('/api/journal?limit=3');
+  const journal = useApi('/api/journal?limit=4');
+  const graph = useApi('/api/constellation');
 
-  const error = analytics.error || library.error || journal.error;
-  if (analytics.loading || library.loading) return <div className="page"><Loading /></div>;
+  const books = useMemo(() => library.data?.data || [], [library.data]);
+  const stars = useMemo(
+    () => books.filter((ub) => ub.book).slice(0, 11).map((ub) => ({ id: ub.book_id, title: ub.book.title })),
+    [books]
+  );
+  const bookById = new Map(books.map((ub) => [ub.book_id, ub.book]));
 
   const a = analytics.data;
-  const books = library.data?.data || [];
-  const bookById = new Map(books.map((ub) => [ub.book_id, ub.book]));
   const name = (user.data?.data?.name || '').split(' ')[0];
   const reading = a?.currentlyReading?.[0];
   const goal = (a?.goals || []).find((g) => g.type === 'yearly_books');
   const inscriptions = journal.data?.data || [];
+  const error = analytics.error || library.error || journal.error;
+  const hasBooks = books.length > 0;
 
   return (
-    <div className="page">
-      <ErrorNote message={error} />
-
-      <div className="stack">
-        <div className="row-between">
-          <div>
-            <span className="eyebrow">{new Date().toLocaleDateString(undefined, { weekday: 'long' })}</span>
-            <h1 className="h-page">{greeting()}{name ? <>, <em className="accent">{name}</em></> : null}</h1>
+    <>
+      <section className="home-hero">
+        <NightScene mode="compact" stars={stars} edges={graph.data?.edges || []} hrefFor={(star) => `/book/${star.id}`} label="Your night sky. Each star is a book in your library." />
+        <div className="home-copy">
+          <span className="eyebrow">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+          <h1>{greeting()}{name ? <>, <em>{name}</em></> : null}.</h1>
+          {reading ? (
+            <p style={{ color: 'rgba(255, 233, 240, 0.85)', fontSize: 17, lineHeight: 1.5, textShadow: '0 2px 18px rgba(10,4,12,.9)' }}>
+              You are reading <strong style={{ color: '#fff' }}>{reading.book?.title}</strong>
+              {reading.book?.pages ? `, page ${Math.round(reading.progress || 0)} of ${reading.book.pages}` : ''}.
+            </p>
+          ) : (
+            <p style={{ color: 'rgba(255, 233, 240, 0.85)', fontSize: 17, lineHeight: 1.5, textShadow: '0 2px 18px rgba(10,4,12,.9)' }}>
+              {hasBooks ? 'Nothing on the nightstand tonight.' : 'Your sky is empty. Shelve a book and it becomes your first star.'}
+            </p>
+          )}
+          <div className="row wrap">
+            {reading ? (
+              <Link className="btn btn-glow btn-sm" href={`/book/${reading.book_id}`}>Continue reading</Link>
+            ) : (
+              <Link className="btn btn-glow btn-sm" href={hasBooks ? '/library' : '/discover'}>{hasBooks ? 'Choose a book' : 'Find a book'}</Link>
+            )}
+            <Link className="btn btn-line btn-sm" href="/constellation">Open the sky</Link>
           </div>
-          <Link className="btn btn-soft btn-stack-m" href="/discover">Add a book</Link>
         </div>
-        <Rule />
-      </div>
+      </section>
 
-      {books.length === 0 ? (
-        <Empty
-          title="Your manuscript is empty"
-          text="Search for a book to shelve your first one, or import your Goodreads library from your profile."
-          href="/discover"
-          action="Find a book"
-        />
-      ) : (
-        <>
-          <div className="grid g-main">
-            <section className="card stack" style={{ gap: 20 }}>
-              <div className="row-between">
-                <div className="stack" style={{ gap: 6 }}>
-                  <span className="eyebrow">Your {a.year} necklace</span>
-                  {goal ? (
-                    <h2 className="h-sec">{goal.current} of {goal.target} books strung</h2>
-                  ) : (
-                    <h2 className="h-sec">{a.booksReadCount} books this year</h2>
-                  )}
-                </div>
-                {goal && <div className="stat" style={{ fontSize: 56, color: 'var(--rose-dark)' }}>{Math.min(100, Math.round((goal.current / goal.target) * 100))}%</div>}
+      <div className="page">
+        <ErrorNote message={error} />
+        {analytics.loading || library.loading ? <Loading /> : (
+          <>
+            <Reveal className="stats-row">
+              <div className="stat-cell"><span className="eyebrow">Books this year</span><span className="stat">{a.booksReadCount}</span></div>
+              <div className="stat-cell"><span className="eyebrow">Pages</span><span className="stat">{a.totalPages.toLocaleString()}</span></div>
+              <div className="stat-cell"><span className="eyebrow">Day streak</span><span className="stat">{a.streak.current}</span></div>
+              <div className="stat-cell"><span className="eyebrow">Best streak</span><span className="stat">{a.streak.longest}</span></div>
+            </Reveal>
+
+            <Reveal className="stack" style={{ gap: 18 }}>
+              <div className="row-between" style={{ alignItems: 'baseline' }}>
+                <h2 className="h-sec">{goal ? <>{goal.current} of {goal.target} books</> : 'Your yearly goal'}</h2>
+                {!goal && <Link className="link-arrow" href="/profile" style={{ fontWeight: 600 }}>Set a goal</Link>}
               </div>
               {goal ? (
                 <>
                   <Pearls total={Math.min(goal.target, 60)} filled={Math.min(goal.current, goal.target, 60)} size={24} gap={6} />
-                  <p className="muted" style={{ fontSize: 14 }}>
-                    {Math.max(0, goal.target - goal.current)} more pearls by 31 December.
-                  </p>
+                  <p className="muted" style={{ fontSize: 14 }}>{Math.max(0, goal.target - goal.current)} more pearls by 31 December.</p>
                 </>
               ) : (
-                <>
-                  <p className="muted">Set a yearly goal and every finished book becomes a pearl on your necklace.</p>
-                  <Link className="btn btn-soft btn-sm" style={{ alignSelf: 'flex-start' }} href="/profile">Set a goal</Link>
-                </>
+                <p className="muted">Set a target and every finished book becomes a pearl on your necklace.</p>
               )}
-            </section>
+            </Reveal>
 
-            <section className="card-pink row" style={{ gap: 20, alignItems: 'center' }}>
-              {reading ? (
-                <>
-                  <Cover book={reading.book} width={110} height={165} />
-                  <div className="stack" style={{ gap: 10 }}>
-                    <span className="eyebrow">Currently reading</span>
-                    <h3 style={{ fontSize: 32 }}>{reading.book?.title}</h3>
-                    {reading.book?.pages ? (
-                      <>
-                        <p className="muted" style={{ fontSize: 14 }}>Page {Math.round(reading.progress || 0)} of {reading.book.pages}</p>
-                        <Pearls total={9} filled={Math.round(Math.min(1, (reading.progress || 0) / reading.book.pages) * 9)} size={14} />
-                      </>
-                    ) : (
-                      <p className="muted" style={{ fontSize: 14 }}>Page {Math.round(reading.progress || 0)}</p>
-                    )}
-                    <Link className="btn btn-primary btn-sm" style={{ alignSelf: 'flex-start' }} href={`/book/${reading.book_id}`}>Continue</Link>
-                  </div>
-                </>
+            <Reveal className="stack" style={{ gap: 14 }}>
+              <div className="row-between" style={{ alignItems: 'baseline' }}>
+                <h2 className="h-sec">Reading activity</h2>
+                <span className="muted" style={{ fontSize: 13 }}>Last 26 weeks</span>
+              </div>
+              <Heatmap data={a.heatmapData} today={today} />
+            </Reveal>
+
+            <Reveal className="stack" style={{ gap: 6 }}>
+              <div className="row-between" style={{ alignItems: 'baseline', marginBottom: 12 }}>
+                <h2 className="h-sec">Recent inscriptions</h2>
+                <Link className="link-arrow" href="/journal/new" style={{ fontWeight: 600 }}>Write a new one</Link>
+              </div>
+              {inscriptions.length === 0 ? (
+                <p className="muted" style={{ padding: '16px 0' }}>Nothing written yet. Open a book and say what you thought.</p>
               ) : (
-                <div className="stack">
-                  <span className="eyebrow">Currently reading</span>
-                  <p className="muted">Nothing on the nightstand right now.</p>
-                  <Link className="btn btn-primary btn-sm" style={{ alignSelf: 'flex-start' }} href="/library">Choose a book</Link>
+                <div>
+                  {inscriptions.map((entry) => {
+                    const book = bookById.get(entry.book_id);
+                    return (
+                      <article key={entry.id} className="entry">
+                        <div className="stack" style={{ gap: 4 }}>
+                          <Link href={`/book/${entry.book_id}`} style={{ fontWeight: 600 }}>{book?.title || 'A book'}</Link>
+                          <span className="muted" style={{ fontSize: 13 }}>{entry.page_number ? `Page ${entry.page_number}` : new Date(entry.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>
+                        </div>
+                        <div className="stack" style={{ gap: 10 }}>
+                          <p className="quote">{entry.quote || entry.content}</p>
+                          <div className="row wrap" style={{ gap: 6 }}>{(entry.tags || []).map((t) => <span key={t} className="tag">{t}</span>)}</div>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
-            </section>
-          </div>
-
-          <div className="grid g-main">
-            <section className="card stack">
-              <div className="row-between"><h3 style={{ fontSize: 30 }}>Your reading activity</h3><span className="muted" style={{ fontSize: 13 }}>Last 26 weeks</span></div>
-              <Heatmap data={a.heatmapData} today={today} />
-            </section>
-            <section className="grid g-keep-2" style={{ gap: 14, alignContent: 'start' }}>
-              <div className="card"><span className="eyebrow">Books</span><div className="stat" style={{ fontSize: 44, marginTop: 6 }}>{a.booksReadCount}</div></div>
-              <div className="card"><span className="eyebrow">Pages</span><div className="stat" style={{ fontSize: 44, marginTop: 6 }}>{a.totalPages.toLocaleString()}</div></div>
-              <div className="card"><span className="eyebrow">Day streak</span><div className="stat" style={{ fontSize: 44, marginTop: 6 }}>{a.streak.current}</div></div>
-              <div className="card"><span className="eyebrow">Best streak</span><div className="stat" style={{ fontSize: 44, marginTop: 6 }}>{a.streak.longest}</div></div>
-            </section>
-          </div>
-
-          <section className="stack" style={{ gap: 18 }}>
-            <div className="row-between"><h2 className="h-sec">Recent inscriptions</h2><Link href="/journal/new" style={{ fontWeight: 600 }}>Write a new one</Link></div>
-            {inscriptions.length === 0 ? (
-              <div className="card-soft muted">No inscriptions yet. Open a book and write down what you thought.</div>
-            ) : (
-              <div className="grid g-3">
-                {inscriptions.map((entry, i) => {
-                  const book = bookById.get(entry.book_id);
-                  return (
-                    <article key={entry.id} className={i % 2 === 0 ? 'card-pink stack' : 'card stack'}>
-                      <span className="eyebrow">{book?.title || 'A book'}{entry.page_number ? ` · p. ${entry.page_number}` : ''}</span>
-                      <p className="quote">{entry.quote || entry.content}</p>
-                      <div className="row wrap">{(entry.tags || []).map((t) => <span key={t} className={i % 2 === 0 ? 'tag tag-white' : 'tag'}>{t}</span>)}</div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        </>
-      )}
-    </div>
+            </Reveal>
+          </>
+        )}
+      </div>
+    </>
   );
 }

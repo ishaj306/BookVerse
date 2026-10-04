@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Cover from '@/components/Cover';
 import { Empty, ErrorNote, Loading } from '@/components/States';
@@ -13,6 +13,7 @@ function Composer() {
   const params = useSearchParams();
   const library = useApi('/api/library');
   const tagList = useApi('/api/tags');
+  const graph = useApi('/api/constellation');
 
   const [bookId, setBookId] = useState(params.get('book') || '');
   const [content, setContent] = useState('');
@@ -31,6 +32,20 @@ function Composer() {
     .filter((t) => !tags.includes(t) && t.startsWith(tagText.trim().toLowerCase()))
     .slice(0, 8);
 
+  // Which other books would these tags join up with? Worked out from what the
+  // constellation already knows, so you see the threads before you make them.
+  const typed = tagText.trim().toLowerCase().replace(/^#/, '');
+  const current = useMemo(() => new Set(typed ? [...tags, typed] : tags), [tags, typed]);
+  const matches = useMemo(() => {
+    if (!current.size) return [];
+    return (graph.data?.nodes || [])
+      .filter((n) => n.id !== bookId)
+      .map((n) => ({ title: n.title, shared: n.tags.filter((t) => current.has(t)) }))
+      .filter((m) => m.shared.length)
+      .sort((a, b) => b.shared.length - a.shared.length)
+      .slice(0, 5);
+  }, [graph.data, current, bookId]);
+
   function addTag(raw) {
     const tag = raw.trim().toLowerCase().replace(/^#/, '');
     if (tag && !tags.includes(tag) && tags.length < 20) setTags([...tags, tag]);
@@ -44,6 +59,12 @@ function Composer() {
     } else if (event.key === 'Backspace' && !tagText && tags.length) {
       setTags(tags.slice(0, -1));
     }
+  }
+
+  function grow(event) {
+    const el = event.target;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
   }
 
   async function save(event) {
@@ -80,71 +101,73 @@ function Composer() {
   }
 
   return (
-    <div className="page" style={{ maxWidth: 1000 }}>
-      <form className="card" style={{ padding: 0, overflow: 'hidden' }} onSubmit={save}>
-        <div className="ribbon-strip" style={{ height: 14 }} />
-        <div className="stack" style={{ padding: 'clamp(20px, 4vw, 40px)', gap: 24 }}>
-          <div className="row" style={{ gap: 18 }}>
-            {selected && <Cover book={selected} width={64} height={96} />}
-            <div className="stack" style={{ gap: 4, flex: 1 }}>
-              <span className="eyebrow">New inscription</span>
-              <h1 style={{ fontSize: 'clamp(30px, 5vw, 44px)' }}>{selected?.title || 'Choose a book'}</h1>
-              {selected && <p className="muted" style={{ fontSize: 14 }}>{selected.author}</p>}
+    <div className="page page-narrow">
+      <form className="stack" style={{ gap: 32 }} onSubmit={save}>
+        <header className="row" style={{ gap: 20, alignItems: 'flex-end' }}>
+          {selected && <Cover book={selected} width={68} height={102} />}
+          <div className="stack" style={{ gap: 8, flex: 1, minWidth: 0 }}>
+            <span className="eyebrow">New inscription</span>
+            <h1 className="h-page" style={{ fontSize: 'clamp(34px, 5.5vw, 56px)' }}>{selected?.title || 'Choose a book'}</h1>
+            {selected && <p className="muted">{selected.author}</p>}
+          </div>
+          <Bow width={72} sway />
+        </header>
+
+        <ErrorNote message={error || library.error} />
+
+        <div className="field">
+          <label htmlFor="book">Book</label>
+          <select id="book" className="input" value={bookId} onChange={(e) => setBookId(e.target.value)}>
+            <option value="">Choose a book…</option>
+            {entries.map((ub) => <option key={ub.book_id} value={ub.book_id}>{ub.book?.title}</option>)}
+          </select>
+        </div>
+
+        <div className="field">
+          <label htmlFor="thought">Your thought</label>
+          <textarea id="thought" className="write" rows={4} maxLength={10000} placeholder="What is on your mind?" value={content} onChange={(e) => setContent(e.target.value)} onInput={grow} />
+        </div>
+
+        <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) 140px', gap: 16 }}>
+          <div className="field"><label htmlFor="quote">A line worth keeping</label><input id="quote" className="input" maxLength={2000} value={quote} onChange={(e) => setQuote(e.target.value)} /></div>
+          <div className="field"><label htmlFor="page">Page</label><input id="page" className="input" inputMode="numeric" value={page} onChange={(e) => setPage(e.target.value.replace(/\D/g, ''))} /></div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="tag">Tags</label>
+          <div className="tag-input">
+            {tags.map((t) => (
+              <button key={t} type="button" className="tag" onClick={() => setTags(tags.filter((x) => x !== t))} aria-label={`Remove tag ${t}`}>{t} ×</button>
+            ))}
+            <input id="tag" placeholder="Add a tag, press Enter" value={tagText} onChange={(e) => setTagText(e.target.value)} onKeyDown={onTagKey} maxLength={40} />
+          </div>
+          {suggestions.length > 0 && (
+            <div className="pillrow">
+              <span className="muted" style={{ fontSize: 13 }}>From your past tags</span>
+              {suggestions.map((t) => <button key={t} type="button" className="chip chip-small chip-outline" onClick={() => addTag(t)}>{t}</button>)}
             </div>
-            <Bow width={64} />
-          </div>
+          )}
+          <p className="threads-hint" aria-live="polite">
+            {matches.length > 0 ? (
+              <>These tags will join <strong>{selected?.title || 'this book'}</strong> to {matches.map((m, i) => (
+                <span key={m.title}>{i > 0 ? ', ' : ''}<em>{m.title}</em> ({m.shared.join(', ')})</span>
+              ))}.</>
+            ) : current.size > 0 ? 'No other book shares these tags yet. This one would be a new star on its own.' : 'Tags are the threads between your books.'}
+          </p>
+        </div>
 
-          <ErrorNote message={error || library.error} />
+        <div className="field">
+          <label htmlFor="link">This reminded me of</label>
+          <select id="link" className="input" value={linkId} onChange={(e) => setLinkId(e.target.value)}>
+            <option value="">No link</option>
+            {entries.filter((ub) => ub.book_id !== bookId).map((ub) => <option key={ub.book_id} value={ub.book_id}>{ub.book?.title}</option>)}
+          </select>
+          <p className="muted" style={{ fontSize: 13 }}>Draw your own ribbon between two books. It shows as a bright, solid thread in your constellation.</p>
+        </div>
 
-          <div className="field">
-            <label htmlFor="book">Book</label>
-            <select id="book" className="input" value={bookId} onChange={(e) => setBookId(e.target.value)}>
-              <option value="">Choose a book…</option>
-              {entries.map((ub) => <option key={ub.book_id} value={ub.book_id}>{ub.book?.title}</option>)}
-            </select>
-          </div>
-
-          <div className="field">
-            <label htmlFor="thought">Your thought</label>
-            <div className="inscription-box">
-              <textarea id="thought" rows={5} maxLength={10000} placeholder="What is on your mind?" value={content} onChange={(e) => setContent(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) 140px', gap: 16 }}>
-            <div className="field"><label htmlFor="quote">Favourite quote</label><input id="quote" className="input" maxLength={2000} value={quote} onChange={(e) => setQuote(e.target.value)} /></div>
-            <div className="field"><label htmlFor="page">Page</label><input id="page" className="input" inputMode="numeric" value={page} onChange={(e) => setPage(e.target.value.replace(/\D/g, ''))} /></div>
-          </div>
-
-          <div className="field">
-            <label htmlFor="tag">Tags</label>
-            <div className="tag-input">
-              {tags.map((t) => (
-                <button key={t} type="button" className="tag" onClick={() => setTags(tags.filter((x) => x !== t))} aria-label={`Remove tag ${t}`}>{t} ×</button>
-              ))}
-              <input id="tag" placeholder="Add a tag, press Enter" value={tagText} onChange={(e) => setTagText(e.target.value)} onKeyDown={onTagKey} maxLength={40} />
-            </div>
-            {suggestions.length > 0 && (
-              <div className="row wrap" style={{ gap: 8 }}>
-                <span className="muted" style={{ fontSize: 13 }}>From your past tags</span>
-                {suggestions.map((t) => <button key={t} type="button" className="chip chip-outline" style={{ minHeight: 34, fontSize: 13 }} onClick={() => addTag(t)}>{t}</button>)}
-              </div>
-            )}
-          </div>
-
-          <div className="field">
-            <label htmlFor="link">This reminded me of</label>
-            <select id="link" className="input" value={linkId} onChange={(e) => setLinkId(e.target.value)}>
-              <option value="">No link</option>
-              {entries.filter((ub) => ub.book_id !== bookId).map((ub) => <option key={ub.book_id} value={ub.book_id}>{ub.book?.title}</option>)}
-            </select>
-            <p className="muted" style={{ fontSize: 13 }}>Draw your own ribbon between two books. It shows as a solid thread in your constellation.</p>
-          </div>
-
-          <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
-            <Link className="btn btn-ghost" href={bookId ? `/book/${bookId}` : '/library'}>Cancel</Link>
-            <button className="btn btn-primary" type="submit" disabled={saving} style={{ padding: '0 44px' }}>{saving ? 'Inscribing…' : 'Inscribe'}</button>
-          </div>
+        <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
+          <Link className="btn btn-ghost" href={bookId ? `/book/${bookId}` : '/library'}>Cancel</Link>
+          <button className="btn btn-primary" type="submit" disabled={saving} style={{ padding: '0 44px' }}>{saving ? 'Inscribing…' : 'Inscribe'}</button>
         </div>
       </form>
     </div>

@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import Cover from './Cover';
-import { Bow, Glasses } from './ornaments';
+import { Glasses } from './ornaments';
 
-const GAP = 8;
+const GAP = 12;
 
 /** Slightly varied heights so shelves look like real, mixed books. */
 function heightFor(book, width) {
@@ -14,13 +14,14 @@ function heightFor(book, width) {
 }
 
 /**
- * Books standing on wooden shelves. Rows are computed from the available
- * width, so it works from a phone to a wide desktop.
+ * Books standing on thin wooden ledges. Rows are worked out from the width
+ * available, so it holds up from a phone to a wide desktop. Covers tilt toward
+ * the pointer and rise in one after another.
  *
  * @param {object[]} books - { id, title, author, cover_url }
  * @param {(book) => string} [hrefFor]
  */
-export default function Bookcase({ books, hrefFor, coverWidth, bow = true, glasses = true }) {
+export default function Bookcase({ books, hrefFor, coverWidth, glasses = true }) {
   const ref = useRef(null);
   const [width, setWidth] = useState(0);
 
@@ -32,48 +33,43 @@ export default function Bookcase({ books, hrefFor, coverWidth, bow = true, glass
     return () => observer.disconnect();
   }, []);
 
-  const cw = coverWidth || (width && width < 520 ? 70 : 100);
+  const cw = coverWidth || (width && width < 520 ? 72 : width && width < 900 ? 92 : 104);
   const perRow = width ? Math.max(2, Math.floor((width + GAP) / (cw + GAP))) : 4;
 
   const rows = [];
   for (let i = 0; i < books.length; i += perRow) rows.push(books.slice(i, i + perRow));
   if (rows.length === 0) rows.push([]);
 
-  const rowHeight = Math.round(cw * 1.65);
+  const rowHeight = Math.round(cw * 1.68);
   const lastRow = rows[rows.length - 1];
   const room = perRow - lastRow.length;
 
   return (
-    <div className="case-wrap">
-      <div className="pstring" />
-      {bow && <div className="bow"><Bow width={64} /></div>}
-      <div className="case wood" style={{ paddingTop: 28 }}>
-        <div className="case-back">
-          <div ref={ref}>
-            {rows.map((row, r) => (
-              <div key={r}>
-                <div className="case-row" style={{ minHeight: rowHeight + 14, paddingTop: r === 0 ? 0 : 14 }}>
-                  {row.map((book) => {
-                    const cover = <Cover book={book} width={cw} height={heightFor(book, cw)} />;
-                    return hrefFor ? (
-                      <Link key={book.id} className="cover-link" href={hrefFor(book)} aria-label={book.title}>
-                        {cover}
-                      </Link>
-                    ) : (
-                      <div key={book.id}>{cover}</div>
-                    );
-                  })}
-                  {glasses && r === rows.length - 1 && room >= 1 && books.length > 0 && (
-                    <div style={{ marginLeft: 6 }}><Glasses width={Math.min(96, cw)} /></div>
+    <div className="shelves" ref={ref}>
+      {rows.map((row, r) => (
+        <div className="shelf-row" key={r}>
+          <div className="shelf-books" style={{ minHeight: rowHeight }}>
+            {row.map((book, i) => {
+              const cover = <Cover book={book} width={cw} height={heightFor(book, cw)} interactive />;
+              return (
+                <div key={book.id} className="rise" style={{ animationDelay: `${Math.min(r * perRow + i, 28) * 35}ms` }}>
+                  {hrefFor ? (
+                    <Link className="cover-link tt" data-title={book.title} href={hrefFor(book)} aria-label={book.title}>
+                      {cover}
+                    </Link>
+                  ) : (
+                    cover
                   )}
                 </div>
-                <div className="shelf wood" style={{ margin: '0 -16px' }} />
-              </div>
-            ))}
-            <div style={{ height: 22 }} />
+              );
+            })}
+            {glasses && r === rows.length - 1 && room >= 1 && books.length > 0 && (
+              <div className="rise" style={{ marginLeft: 8, animationDelay: '400ms' }}><Glasses width={Math.min(92, cw)} /></div>
+            )}
           </div>
+          <div className="ledge wood" style={{ animationDelay: `${r * 120}ms` }} />
         </div>
-      </div>
+      ))}
     </div>
   );
 }
